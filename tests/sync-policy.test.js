@@ -1,0 +1,18 @@
+'use strict';
+const a=require('node:assert/strict'),P=require('../lib/sync-policy');
+const start=Date.parse('2026-11-09T20:00:00Z'),c={enrollment:'tracked_and_new',new_since:new Date(start).toISOString()};
+a.equal(P.eligible(c,true,null,start),true);
+a.equal(P.eligible(c,false,'2026-11-09T19:59:59Z',start+10000),false,'old unarchived chat must not be enrolled by updated date');
+a.equal(P.eligible(c,false,start,start+10000),false,'strictly after, not on activation boundary');
+a.equal(P.eligible(c,false,start+1000,start+10000),true);
+a.equal(P.eligible(c,false,null,start+10000),false,'unknown creation date is not proof of newness');
+a.equal(P.eligible({...c,enrollment:'tracked'},false,start+1000,start+10000),false);
+a.equal(P.timestamp(1794254400),1794254400000);
+a.equal(P.timestamp('2026-11-09T20:00:00Z'),start);
+a.equal(P.eligible(c,false,start+3600000,start),false,'unreasonable future date excluded');
+const q={queue:[]};P.enqueue(q,{id:'chat:x',kind:'chat',notBefore:100});P.enqueue(q,{id:'chat:x',kind:'chat',notBefore:50});
+a.equal(q.queue.length,1);a.equal(q.queue[0].notBefore,100);a.equal(q.queue[0]._revision,2,'fresh hint has a new revision');
+a(P.retryDelay({code:'API_COOLDOWN',retryAfterMs:44000})>=60000);
+a(P.retryDelay({code:'API_COOLDOWN',retryAfterMs:240000})>=240000);
+a.equal(P.publicState(null).enabled,false);
+console.log('PASS: opt-in enrollment boundary, no historical backfill, unknown/future dates, queue dedupe, durable hint revisions, Retry-After');

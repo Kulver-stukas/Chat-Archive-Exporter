@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Workspace chat registry smoke</title></head>
+<body><pre id="result">START</pre>
+<script src="../lib/normalize.js"></script>
+<script src="../lib/hash.js"></script>
+<script src="../lib/paths.js"></script>
+<script src="../lib/vault.js"></script>
+<script>
+(async()=>{
+  const result=document.querySelector('#result');
+  const check=(v,m)=>{if(!v)throw Error(m);};
+  try {
+    const root=await navigator.storage.getDirectory();
+    const handle=await root.getDirectoryHandle('cae0152-chat-smoke',{create:true});
+    const account='a-test';
+    const item={id:'12345678-1234-1234-1234-123456789abc',title:'My chat',projectId:'',project:'',updated:'2026-08-10T22:17:26.666Z'};
+    const layout=ChatArchivePaths.createLayout('Workspace browser');
+    const path=layout.chatPath(item),key=account+'|'+item.id;
+    const text='---\ntitle: "My chat"\nconversation_id: "'+item.id+'"\nupdated: "2026-08-10T22:17:26.666Z"\nexported: "2026-11-09T17:40:15.442Z"\n---\n\n## Prompt:\nTest\n';
+    const v1=await ChatArchiveVault.openStore(handle);
+    await v1.useWorkspace(layout.prefix, account);
+    check((await v1.decideChat(item,{key,path})).action==='fetch','first request');
+    check((await v1.writeText(path,text,{kind:'chats',key,remoteChat:item})).status==='saved','saved');
+    const v2=await ChatArchiveVault.openStore(handle);
+    await v2.useWorkspace(layout.prefix,account);
+    check((await v2.decideChat(item,{key,path})).action==='skip','skip after reload');
+    const idx = await ChatArchiveVault.parentDirectory(handle,ChatArchiveVault.workspaceIndexPath(layout.prefix));
+    const blob = await (await idx.dir.getFileHandle(idx.filename)).getFile();
+    const json=JSON.parse(await blob.text());
+    check(json.chats[item.id].updated==='2026-08-10T22:17:26.666Z','YAML updated preserved');
+    check(json.chats[item.id].exported==='2026-11-09T17:40:15.442Z','exported only metadata');
+    check(json.chats[item.id].sha256.length===64,'SHA-256 persisted');
+    check((await v2.decideChat({...item,updated:'2026-08-10T22:17:27.666Z'},{key,path})).action==='fetch','changed remote');
+    result.textContent='PASS: real Chromium OPFS workspace registry, on-disk YAML version, repeat skip, changed remote, SHA-256';
+  }catch(e){result.textContent='FAIL: '+e.stack;}
+})();
+</script></body></html>

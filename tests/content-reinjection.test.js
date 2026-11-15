@@ -1,0 +1,17 @@
+'use strict';
+const assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
+const event=()=>({calls:[],addListener(cb){this.calls.push(cb);}});
+let hello=0;
+const chrome={runtime:{id:'same',getManifest:()=>({version:'0.1.6.4'}),onConnect:event(),onMessage:event(),sendMessage:async()=>{hello++;return {ok:true};}}};
+const sandbox={chrome,document:{readyState:'complete',body:{},visibilityState:'visible',getElementById:()=>null,addEventListener(){}},location:{pathname:'/',search:''},window:{addEventListener(){}},setInterval(){},setTimeout,clearTimeout,AbortController,console};
+vm.createContext(sandbox);
+for(let n=0;n<3;n++)vm.runInContext(fs.readFileSync(path.join(__dirname,'../content.js'),'utf8'),sandbox);
+assert.equal(chrome.runtime.onConnect.calls.length,1,'duplicate injection must not register multiple ports');
+assert.equal(chrome.runtime.onMessage.calls.length,1);
+let reply;
+chrome.runtime.onMessage.calls[0]({type:'CAE_BRIDGE_PING'},{id:'same'},r=>reply=r);
+assert.deepEqual(JSON.parse(JSON.stringify(reply)),{ok:true,version:'0.1.6.4'});
+for(let n=0;n<3;n++)vm.runInContext(fs.readFileSync(path.join(__dirname,'../sync-watch.js'),'utf8'),sandbox);
+assert.equal(hello,1,'watcher must not double-register or send redundant startup HELLO');
+assert.equal(chrome.runtime.onMessage.calls.length,2);
+console.log('PASS: current content and watcher scripts are idempotent after repeated injection; bridge ping identifies script version');

@@ -1,0 +1,35 @@
+name: Publish extension pre-release
+
+on:
+  push:
+    branches:
+      - 'release/v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+      - name: Verify version, package and publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#release/}"
+          actual="$(node -p 'require("./manifest.json").version')"
+          test "$tag" = "v$actual"
+          test -f "release-notes/$tag.md"
+          mkdir -p dist/chat-archive-exporter
+          cp -- *.js *.html *.css manifest.json README.md CHANGELOG.md LICENSE dist/chat-archive-exporter/
+          cp -R -- lib dist/chat-archive-exporter/
+          (cd dist && zip -q -r "chat-archive-exporter-$tag.zip" chat-archive-exporter)
+          gh release create "$tag" "dist/chat-archive-exporter-$tag.zip" \
+            --target "$GITHUB_SHA" \
+            --title "Chat Archive Exporter $tag (test build)" \
+            --notes-file "release-notes/$tag.md" \
+            --prerelease

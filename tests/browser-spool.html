@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8"><title>CAE background buffer browser test</title></head>
+<body><pre id="result">START</pre>
+<script src="../lib/hash.js"></script>
+<script src="../lib/paths.js"></script>
+<script src="../lib/vault.js"></script>
+<script src="../lib/sync-spool.js"></script>
+<script>
+(async()=>{
+ const result=document.getElementById('result');
+ const check=(x,m)=>{if(!x)throw Error(m)};
+ const account='browser-workspace',prefix='ChatGPT/Browser QA';
+ const id='aaaaaaaa-1111-2222-3333-444444444444';
+ const path=prefix+'/Unassigned/Test ['+id+'].md';
+ const updated='2026-11-11T13:20:00Z';
+ const item={id,title:'Browser test',created:'2026-11-11T13:00:00Z',updated};
+ const text='---\ntitle: "Browser test"\nconversation_id: "'+id+'"\nupdated: "'+updated+'"\nexported: "2026-11-11T13:21:00Z"\n---\n\nBrowser IndexedDB capture\n';
+ try{
+  if(sessionStorage.getItem('spoolReloaded')==='yes'){
+   const captured=await ChatArchiveSyncSpool.pending(account);
+   check(captured.length===1&&captured[0].text===text,'offline Markdown survives page reload');
+   check((await ChatArchiveSyncSpool.readMirror(account,prefix)).chats[id].title==='Browser test','mirror survives reload');
+   await ChatArchiveSyncSpool.finish(account,captured[0]);
+   check((await ChatArchiveSyncSpool.stats(account)).pending===0,'commit removes capture');
+   result.textContent='PASS: real Chromium IndexedDB mirror and buffered Markdown survive JS-context reload; atomic completion';
+   sessionStorage.removeItem('spoolReloaded');return;
+  }
+  const ledger={schema:'cae.workspace-chats.v1',account_id:account,chats:{[id]:{path,title:'Browser test',sha256:'a'.repeat(64),bytes:100}}};
+  await ChatArchiveSyncSpool.seed(account,prefix,ledger,[],{sources:{}});
+  const r=await ChatArchiveSyncSpool.stage(account,prefix,{item,text,path});
+  check(r.status==='captured','captured');
+  check((await ChatArchiveSyncSpool.pending(account))[0].text===text,'stored bytes');
+  sessionStorage.setItem('spoolReloaded','yes');
+  location.reload();
+ }catch(e){result.textContent='FAIL: '+(e?.stack||String(e));}
+})();
+</script></body></html>

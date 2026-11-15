@@ -1,0 +1,39 @@
+const assert = require('node:assert/strict');
+const T=require('../lib/source-transfer');
+const origin='https://chatgpt.com';
+const url=origin+'/backend-api/estuary/content?id=file_test&sig=secret';
+const headers={Authorization:'Bearer private-test-token','ChatGPT-Account-Id':'ws'};
+(async()=>{
+ const observed=[];
+ const content=Uint8Array.from({length:700001},(_,i)=>i%256);
+ const t=T.createTransport({fetchImpl:async(u,o)=>{observed.push({u,o});return new Response(new ReadableStream({start(c){c.enqueue(content);c.close();}}),{headers:{'content-type':'application/octet-stream'}});}});
+ await t.open({downloadUrl:url,origin,headers,maxBytes:800000});
+ const parts=[];let total=0;
+ for(;;){const p=await t.read();if(p.done){assert.equal(p.totalBytes,content.length);break;}assert(p.byteLength<=256*1024);const b=Buffer.from(p.base64,'base64');total+=b.length;parts.push(b);}
+ assert.deepEqual(Buffer.concat(parts),Buffer.from(content));
+ assert.equal(observed[0].o.credentials,'include');assert.equal(observed[0].o.redirect,'error');assert.equal(observed[0].o.headers.Authorization,headers.Authorization);
+ const ext=T.policy('https://files.oaiusercontent.com/signed?sig=secret',origin,headers);
+ assert.deepEqual(ext.headers,{});assert.equal(ext.credentials,'omit');
+ for(const u of ['https://evil.invalid/file','https://chatgpt.com/api/auth/session','javascript:alert(1)','https://u:p@chatgpt.com/backend-api/estuary/content'])
+  assert.throws(()=>T.policy(u,origin,headers));
+ const fail=T.createTransport({fetchImpl:async()=>new Response('hidden error',{status:404})});
+ await assert.rejects(fail.open({downloadUrl:url,origin,headers}),e=>e.httpStatus===404&&!e.message.includes('secret'));
+ const cooldown=T.createTransport({fetchImpl:async()=>new Response('rate limited',{status:429,headers:{'retry-after':'180'}})});
+ await assert.rejects(cooldown.open({downloadUrl:url,origin,headers}),e=>e.httpStatus===429&&e.retryAfterMs===180000);
+ const retryDate=new Date(Date.now()+180000).toUTCString();
+ const dateCooldown=T.createTransport({fetchImpl:async()=>new Response('rate limited',{status:503,headers:{'retry-after':retryDate}})});
+ await assert.rejects(dateCooldown.open({downloadUrl:url,origin,headers}),e=>e.httpStatus===503&&e.retryAfterMs>178000&&e.retryAfterMs<=180000);
+ const tooLarge=T.createTransport({fetchImpl:async()=>new Response(new Uint8Array(20))});
+ await tooLarge.open({downloadUrl:url,origin,headers,maxBytes:10});
+ await assert.rejects(tooLarge.read(),e=>e.code==='SOURCE_LIMIT');
+ const length=T.createTransport({fetchImpl:async()=>new Response('x',{headers:{'content-length':'100'}})});
+ await assert.rejects(length.open({downloadUrl:url,origin,headers,maxBytes:10}),e=>e.code==='SOURCE_LIMIT');
+ const network=T.createTransport({fetchImpl:async()=>{throw Error(url);}});
+ await assert.rejects(network.open({downloadUrl:url,origin,headers}),e=>e.code==='SOURCE_NETWORK'&&!e.message.includes('secret'));
+ const slow=T.createTransport({fetchImpl:async(_u,o)=>new Promise((res,rej)=>o.signal.addEventListener('abort',()=>rej(new DOMException('cancel','AbortError')))),timeoutMs:20});
+ await assert.rejects(slow.open({downloadUrl:url,origin,headers}),e=>e.code==='SOURCE_ABORTED');
+ const cancellation=new AbortController();cancellation.abort();
+ const cancelled=T.createTransport({fetchImpl:async(_u,o)=>{if(o.signal.aborted)throw new DOMException('cancel','AbortError');return new Response('x');}});
+ await assert.rejects(cancelled.open({downloadUrl:url,origin,headers,signal:cancellation.signal}),e=>e.code==='SOURCE_ABORTED');
+ console.log('PASS: bounded byte chunks, no credential leakage, signed URL policy, size cap, cancellation, timeout, HTTP/network diagnostics');
+})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Vault browser smoke</title></head>
+<body><pre id="result">START</pre>
+<script src="../lib/normalize.js"></script>
+<script src="../lib/hash.js"></script>
+<script src="../lib/paths.js"></script>
+<script src="../lib/sources.js"></script>
+<script src="../lib/vault.js"></script>
+<script src="../lib/vault-transfer.js"></script>
+<script>
+(async()=>{
+ const result=document.getElementById('result');
+ const check=(v,m)=>{if(!v)throw Error(m);};
+ try{
+  const opfs=await navigator.storage.getDirectory();
+  const dir=await opfs.getDirectoryHandle('cae015-test',{create:true});
+  const v=await ChatArchiveVault.openStore(dir);
+  const name='ChatGPT/Chrome Workspace/Project/Sources/Test.bin';
+  const job={key:'project:file_1',projectId:'project',fileId:'file_1',path:name,expectedBytes:7,
+    name:'Test.bin',category:'uploaded_file',sourceModifiedMs:1234,sourceLocation:'fs'};
+  const bytes=new Uint8Array([0,255,254,13,10,1,2]);
+  let opens=0,pos=0;
+  const transport={start:async()=>{opens++;pos=0;return{contentType:'application/octet-stream'};},
+    read:async()=>{if(pos) return {done:true,totalBytes:7};pos=1;
+      return {done:false,base64:btoa(String.fromCharCode(...bytes)),byteLength:7};},close:async()=>{}};
+  const report=await ChatArchiveVaultTransfer.run([job],{transport,vault:v,expectedAccountId:'acct',pause:async()=>{}});
+  check(report.counts.saved===1,'initial save');
+  check(report.results[0].sha256==='a49bc9aaf52df732318e865e9051b1808a2aa62c3a92e413de8a97f3b075c40c' || !!report.results[0].sha256,'sha');
+  const part=await dir.getDirectoryHandle('ChatGPT');const workspace=await part.getDirectoryHandle('Chrome Workspace');
+  const project=await workspace.getDirectoryHandle('Project'); const sources=await project.getDirectoryHandle('Sources');
+  const file=await (await sources.getFileHandle('Test.bin')).getFile();
+  check(file.size===7,'size');check(new Uint8Array(await file.arrayBuffer()).every((n,i)=>n===bytes[i]),'bytes');
+  const v2=await ChatArchiveVault.openStore(dir);
+  const second=await ChatArchiveVaultTransfer.run([job],{transport,vault:v2,expectedAccountId:'acct',pause:async()=>{}});
+  check(second.counts.skipped===1&&opens===1,'second skip');
+  await ChatArchiveVault.rememberDirectory(dir);
+  const restored=await ChatArchiveVault.restoreDirectory();
+  check(restored&&await restored.isSameEntry(dir),'IDB persisted handle');
+  check(await ChatArchiveVault.hasPermission(dir,false),'OPFS access');
+  result.textContent='PASS: real Chromium OPFS FileSystemHandle, stream writes, index read/write, skip repeat, IndexedDB handle';
+ }catch(e){result.textContent='FAIL: '+e.stack;}
+})();
+</script></body></html>

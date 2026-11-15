@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chat Archive Exporter</title><link rel="stylesheet" href="styles.css"></head>
+<body class="panel">
+  <header class="panel-head"><div class="logo">CA</div><div><h1>Chat Archive Exporter</h1><small id="scope">Connecting to ChatGPT…</small></div></header>
+  <nav class="tabs" aria-label="Export mode"><button id="modeCurrent" class="selected">Current chat</button><button id="modeAll">All conversations</button></nav>
+  <main>
+    <section id="folderSection" class="card">
+      <div class="row"><span class="title">Output</span></div>
+      <label class="inline-option"><input type="radio" name="outputMode" id="outputDownload" checked> Download .md (current chat) or .zip (selected chats)</label>
+      <label class="inline-option"><input type="radio" name="outputMode" id="outputFolder"> Write directly to Vault (manual incremental export)</label>
+      <div id="folderControls" class="hidden">
+        <div class="row" style="margin-top:12px"><span class="title">Vault directory</span><button id="pickFolder" class="small">Choose Vault…</button></div>
+        <div class="hint" id="folderStatus">Not selected. Choose an Obsidian vault or another directory.</div>
+        <div class="row" style="margin-top:8px"><button id="authorizeVault" class="small hidden">Restore Vault access…</button></div>
+        <div class="hint">Existing sources are skipped using the on-disk index; changed remote sources are reported but not overwritten. Locally edited files are preserved. Background updates remain off until enabled below.</div>
+      </div>
+      <div class="row" style="margin-top:12px"><span class="title">Account configuration</span><button id="snapshotSettings" class="small" title="Save current workspace settings to Vault without downloading conversations or Source files">↻ Snapshot to Vault</button></div>
+      <p class="hint">Read-only snapshot of this verified workspace's Projects, personalization, GPT metadata, and explicitly installed Plugins with bundled Skills. No Memory, other workspaces, chat bodies or binary Sources.</p>
+      <div class="hint">v0.1.6.8: Manual exports are queued. ZIP remains a bounded test option. Vault writes Sources directly (up to 512 MiB/file, 1 GiB per manual run) and keeps a persistent index. Select a Project chat or a zero-chat Project group to include its available metadata and Sources.</div>
+      <div class="hint">Manual exports preserve indexed chat paths; new GPT conversations use <code>ChatGPT / Workspace / _GPTs / GPT / Chat.md</code>. After the job is accepted, you may close this panel. Keep a live ChatGPT tab in the original workspace until all required content has been received.</div>
+    </section>
+    <section class="card" id="currentSection">
+      <div class="row"><span class="title">Open conversation</span><button class="small" id="reconnect" title="Manual recovery; active ChatGPT tabs reconnect automatically">Reconnect</button></div>
+      <p id="currentTitle" class="conversation-title">Detecting active tab…</p>
+      <button class="primary wide" id="exportCurrent" disabled>↓ Export current chat</button>
+    </section>
+    <section class="card hidden" id="allSection">
+      <div class="row"><span class="title">Available conversations</span><button class="small" id="loadAll" title="Force an update; chats normally load on opening this section">↻ Refresh</button></div>
+      <p id="listSummary" class="hint">Conversations load automatically when this section opens.</p>
+      <input id="search" class="search" type="search" autocomplete="off" placeholder="Filter by conversation title, Project or GPT">
+      <div class="row selection-row"><label class="inline-option"><input type="checkbox" id="selectAll"> Select all</label><button id="clearSelection" class="small">Clear</button><span id="selectedCount" class="count">0 selected</span></div>
+      <div id="groupList" class="group-list" aria-live="polite"></div>
+      <button class="primary wide" id="exportSelected" disabled>↓ Export selection</button>
+    </section>
+    <section class="card" id="syncSection">
+      <div class="row"><span class="title">Background update <small>(this workspace)</small></span></div>
+      <p class="hint">Disabled by default. First export at least one chat to this workspace's Vault. Existing service files and write permission are required.</p>
+      <label class="inline-option"><input type="checkbox" id="syncEnabled"> Enable background update</label>
+      <label class="sync-field">Chat scope
+        <select id="syncScope"><option value="active">Active and finishing conversations</option><option value="workspace">All eligible workspace conversations</option></select>
+      </label>
+      <label class="sync-field">Enrollment
+        <select id="syncEnrollment"><option value="tracked">Already archived objects only</option><option value="tracked_and_new">Archived + created after enabling this mode</option></select>
+      </label>
+      <label class="inline-option"><input type="checkbox" id="syncSources"> Check Project Sources (every 6 hours)</label>
+      <p class="hint">No backfill of older unarchived chats or Sources. Existing changed Sources are reported, not overwritten. Removed Sources move to deleted/ only after two complete inventories. ChatGPT must remain open; this panel may be closed.</p>
+      <div class="row"><button id="syncApply" class="small" disabled>Apply / enable</button><button id="syncPause" class="small" disabled>Pause</button></div>
+      <p class="hint" id="syncStatus" role="status">Background updates are off.</p>
+      <p class="hint" id="accessState">Permission checks run for enabled workspaces.</p>
+      <button id="exportAccessDiagnostics" class="small" title="Local permission timeline only; no chat text, tokens or file paths">Export access diagnostics</button>
+      <pre class="log hidden" id="syncLog" aria-label="Background update log"></pre>
+    </section>
+    <section class="card status-area">
+      <div class="row"><span class="title">Progress</span><button id="cancel" class="small hidden">Stop export</button></div>
+      <progress id="progress" class="hidden" max="1" value="0"></progress>
+      <div id="manualHint" class="hint">Manual exports continue after this panel closes.</div>
+      <button id="retryManual" class="small hidden">Retry delivery / step</button>
+      <div id="status" role="status" class="hint">Ready.</div>
+      <pre id="log" class="log hidden" aria-label="Export log"></pre>
+    </section>
+  </main>
+  <script src="lib/normalize.js"></script>
+  <script src="lib/hash.js"></script>
+  <script src="lib/paths.js"></script>
+  <script src="lib/vault.js"></script>
+  <script src="lib/sort.js"></script>
+  <script src="lib/manual-store.js"></script>
+  <script src="panel.js"></script>
+</body></html>

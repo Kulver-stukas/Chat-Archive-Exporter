@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "Chat Archive Exporter",
+  "description": "ChatGPT Markdown and original-source export to Vault, with opt-in workspace-scoped background updates.",
+  "version": "0.1.6.9",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "sidePanel",
+    "tabs",
+    "storage",
+    "alarms",
+    "offscreen",
+    "scripting",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*"
+  ],
+  "action": {
+    "default_title": "Chat Archive Exporter",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "worker.js"
+  },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
+      "js": [
+        "lib/normalize.js",
+        "lib/config-inventory.js",
+        "lib/source-transfer.js",
+        "lib/api.js",
+        "content.js",
+        "sync-watch.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "version_name": "0.1.6.9 schedules + chat metadata demonstrator"
+}
