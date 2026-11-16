@@ -28,8 +28,12 @@ jobs:
           cp -- *.js *.html *.css manifest.json README.md CHANGELOG.md LICENSE dist/chat-archive-exporter/
           cp -R -- lib dist/chat-archive-exporter/
           (cd dist && zip -q -r "chat-archive-exporter-$tag.zip" chat-archive-exporter)
-          gh release create "$tag" "dist/chat-archive-exporter-$tag.zip" \
-            --target "$GITHUB_SHA" \
-            --title "Chat Archive Exporter $tag (test build)" \
-            --notes-file "release-notes/$tag.md" \
-            --prerelease
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Pre-release $tag already exists; leaving its published files unchanged."
+          else
+            gh release create "$tag" "dist/chat-archive-exporter-$tag.zip" \
+              --target "$GITHUB_SHA" \
+              --title "Chat Archive Exporter $tag (test build)" \
+              --notes-file "release-notes/$tag.md" \
+              --prerelease
+          fi
