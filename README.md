@@ -1,3 +1,112 @@
+# Chat Archive Exporter v0.1.6.11 rev.1 - Library jobs and selected originals (test build)
+
+## Manual start, not automatic full rescans
+
+- Opening Library / Images, focusing another browser tab, reconnecting the panel, or letting a cache expire no longer starts Library collection.
+- **Start inventory** is the only initial collection trigger. The resulting list is committed to the selected Vault. **Stop / pause** cancels the current Library task and disables its metadata monitoring; previous committed data is preserved.
+- Library jobs no longer hold the panel's global busy lock. Sections may be switched and the panel may be closed after acceptance.
+
+## Persisted baseline and incremental metadata
+
+- The snapshot is `ChatGPT/<workspace>/_Library/_inventory.json` (schema `cae.library-vault.v1`, catalog schema `cae.library-inventory.v3`).
+- The first successful manual snapshot establishes an immutable enrollment cutoff. Optional monitoring starts only after that commit. The initial-run checkbox is visible and checked; clear it for one-shot collection.
+- Background checks run on a five-minute cadence while the browser has an authenticated tab in the original workspace and Vault write permission. They enumerate inexpensive list/reference pages; only unseen file IDs with a server creation timestamp after the cutoff qualify for additional metadata. Known file descriptors are not re-requested. Undated or older newly discovered IDs require a manual inventory.
+- Membership in Project Sources is resolved using actual file/library IDs and existing Vault source records, not names or folder names. These files remain visible as references but are excluded from descriptor enrichment and this Library original-download operation. Project/reference list queries still occur to identify new memberships.
+- Checkpoints, work queues, cooldowns and the selected Vault handle survive worker restart. Missing permission, scope changes or rate limits pause the job. No automatic deletion, backfill of older unknown files, or overwrite of local changes.
+
+## Selected original files (experimental)
+
+- Eligible rows have selection checkboxes. **Select eligible visible files** respects the current filter; **Archive selected to Vault** freezes the explicit selection.
+- Eligibility means an original can be requested, not that the server will deliver it. Native Pages/Sites, external mounted content, known Project Sources and files above the byte cap are excluded.
+- Originals are grouped under `_Library/Uploaded|Generated|Unknown/Images|Files/`. A file-ID suffix prevents name collisions. Repeated references to the same file ID do not create extra copies.
+- Original URL resolution and authenticated transfer remain inside the isolated ChatGPT content script. Signed URLs, auth headers, response bodies and original bytes are never stored in the job metadata/catalog.
+- Streamed originals are checked against known sizes and SHA-256, then read back and verified on disk. Existing indexed originals are hashed before reuse; local edits are preserved. A staged checksum receipt supports recovery after a completed write and an interrupted index update.
+- Per-file failures, including HTTP 415, remain in `_Library/_download_report.json` without repeatedly retrying that file. Other selected files continue. HTTP 429/authentication problems pause the task instead.
+- Safety limits: 512 MiB per original, 1 GiB received per archival run, bounded transfer runtime. Remaining over-budget files are marked deferred and require another explicit selection/run. Original download is never automatic.
+
+## Installation and verification
+
+Extract the install ZIP and replace files in the **same existing unpacked extension directory**; click Reload in `chrome://extensions`. Do not uninstall or clear extension storage. Reopen the panel in the intended workspace. A normal ChatGPT conversation page is sufficient; the website's Library/Space page is not required.
+
+No new Chrome permissions or host permissions. Existing chat export and Project Sources controllers are retained. This remains a test build; its authenticated ChatGPT API paths have not been verified in live production during local build testing. See `TEST_REPORT_v0.1.6.11-rev1.md` for the actual executed tests and blocked checks.
+
+## First test run
+
+1. Choose **Library / Images**, verify the workspace, and choose the existing Vault or restore its write access.
+2. Leave **After saving, monitor new file metadata** checked to enroll new files after the first snapshot. Clear it to test a single manual run without monitoring.
+3. Click **Start inventory** once. Switch to **Current chat** or **All conversations**, then reopen Library: there must be no new full scan caused by navigation.
+4. After completion, check `_Library/_inventory.json` and its `baseline_at`, source exclusions and descriptor counts. Reopening the panel reads the local saved job/catalog, not hundreds of descriptors.
+5. Create a new file in the same workspace after the baseline. On a later scheduled check it should appear without re-enriching old files. Missing dates are not treated as newness.
+6. Select a small ordinary file and a generated image, then choose **Archive selected to Vault**. Inspect the originals, per-file statuses and `_download_report.json`. A `.js` that returns HTTP 415 must remain a reported failure, not an empty successful file.
+7. Stop/pause monitoring. Wait or switch browser tabs: no new Library job should start. Chat background sync is a separate setting and is not disabled by the Library Stop button.
+
+## Deliberate limitations
+
+The listing API has no verified delta cursor, so background discovery still scans paginated list metadata; it is not a server push subscription. Only additional per-file descriptor calls are restricted to new items. Files deleted or changed remotely are not removed/overwritten by this incremental mode. Sources not present in Library remain separate unresolved reference records. Files with different IDs are not deduplicated by filename or assumed equal content. Origin describes the evidence available from this service, not a verified author identity. A Work sandbox, native Pages, Sites, Memory and external connector originals are outside this feature.
+
+---
+
+## Historical documentation (earlier versions; superseded by the sections above)
+
+# Chat Archive Exporter v0.1.6.10 rev.2 — Library file references (test build)
+
+This revision keeps the **metadata-only** Library/Images scan. A physical file is enumerated once by `file_id` even if present in Library, Images and multiple Project Sources. The catalog separately retains **origin** (`uploaded`, `generated`, `unknown`) and **placements** (Library directory, Project Source, conversation/message reference, Images gallery). Project Sources are placements, **not** evidence of user-uploaded authorship. A message reference does **not** establish whether the file came from the user prompt, assistant answer, or Work. There are no guessed per-file UI URLs: unobserved ones remain `null`.
+
+## Install and test
+
+1. Replace files in the **same unpacked extension directory** used for v0.1.6.10 rev.1; click Reload in `chrome://extensions`. Do not uninstall or clear extension storage/IndexedDB; this preserves existing Vault settings and accepted background/manual jobs. The unpacked extension must show `0.1.6.10 rev.2`.
+2. Open any normal ChatGPT conversation in the **intended verified workspace**. Opening `/library` or `/space` is **not necessary**. In the side panel choose **Library / Images**, then Refresh if a previous scan is cached.
+3. Inspect the group labels (Uploaded/Generated/Unknown × Images/Other files) and the new **File context** filter (Project Sources, Conversation references, Library, Images). `Project Source: <name>` is shown only when the Project detail API supplies a matching `file_id` or `library_file_id`, not merely because the file is in a folder with a matching name.
+4. Export **Catalog JSON**, then inspect `status`, `classification_status`, `links_status`, `collections`, `items[].placements`, `summary.by_context` and `unmatched_project_refs`. Status `complete` now certifies **Library + Images enumeration only**. Descriptor or Project reference failures are separate statuses, and no incomplete resolution is represented as a full empty set.
+5. Compare results on Z_Cat Free, Alexblow Free and Business. Check a file known to be a Project Source in `Logos`, an image present only in Images, and a Work Output document. Roles of messages and Work links remain unknown pending dedicated observation.
+
+## Collection and privacy boundaries
+
+Current-scope endpoints: Library nodes (cursor and folder traversal), generated Images gallery, file descriptors, Projects sidebar and individual Project details. Only allowlisted IDs, names, types and reference metadata enter the catalog. The extension does not save Project instructions or full Project responses, file bytes, signed URLs, auth tokens, Memory, Pages, automations or contents of unrelated accounts. Unmatched Project Source references are recorded separately without inventing a Library file.
+
+The foreground scan stops when its panel/Port is closed. At most 1,200 non-gallery file descriptors are enriched in this test revision; two are queried concurrently with conservative pauses, 429 handling and active Workspace verification. Very large workspaces may still take time. Background inventory and original-file export are **deferred**. Existing chat export and separately enabled background update are unchanged.
+
+## Known limitations
+
+- A Library record's `origination_thread_id` and `origination_message_id` establish an observed reference, not the author role. The exact chat/Project URL and message anchor are not exposed by this listing and are not fabricated.
+- The Work UI's Outputs and ephemeral sandbox files are not yet enumerated as independent storage sources. A `codex` or `caas` descriptor cannot by itself identify a Work session with certainty.
+- A Project Source missing a matching Library record is listed under `unmatched_project_refs` rather than silently added or dropped. File content duplicates with different `file_id` values are **not** deduplicated by filename.
+- Project detail APIs are private and may change. `links_status: partial` means the reference view is incomplete, not that the underlying file list is missing. Rate limits or 404 descriptors set `classification_status: partial` while the Library/Images listing may still be complete.
+- Live Chrome authentication/permission regression checks have not yet been run for this revision.
+
+---
+
+## Previous rev.1 documentation (historical)
+
+# Chat Archive Exporter v0.1.6.10 rev.1 — Library / Images inventory (test build)
+
+## New in v0.1.6.10 rev.1
+
+**Scope:** Read-only inventory of the active, verified ChatGPT Library and the independent generated Images gallery. No original file content is requested or downloaded by this new feature, and no Library files are written to the Vault. Existing chat exports and their separately configured background jobs retain v0.1.6.9 behavior.
+
+1. In `chrome://extensions`, update the **same unpacked extension directory** and click **Reload**. Do not uninstall the previous version or clear its local storage; existing Vault indexes and queued jobs must be preserved.
+2. Open ChatGPT Personal / Free or Business / Space in the desired workspace. Open the Chat Archive Exporter side panel and select **Library / Images**. The inventory will load; **Refresh** repeats the read-only scan.
+3. Entries appear in separate **Uploaded**, **Generated**, and **Unknown** origin groups, each split into **Images** and **Other files**. Labels may be `confirmed`, `inferred`, `conflicting`, or `unavailable`; `my_files` indicates a plausible but *inferred* uploaded origin, not proof of file authorship.
+4. To inspect data and report API problems, click **Catalog JSON**. This downloads a JSON **list/diagnostic report only**, with no signed content URLs, tokens, source IP addresses or original file bytes. The catalog is not automatically saved in Vault.
+
+**Collection APIs** (all restricted to the verified currently active workspace): `GET /backend-api/files/library/nodes`, with cursor paging and attempted nested directory scans; `GET /backend-api/my/recent/image_gen?limit=50`, with `after` paging; and, only where needed, `GET /backend-api/files/{file_id}` for allowlisted metadata (`use_case`, MIME, size, safe origin markers). Duplicate images in Library and gallery are joined by a real `file_id`; a gallery ID `s_...` is **not** treated as a file ID. Files present only in Images remain in the catalog. Unknown and conflicting origins are not silently guessed from conversation IDs, `fs`/`sediment` locations or names.
+
+**Completeness and limits:** Each collection independently reports `complete` or `partial`, counts, and warnings. The diagnostic build caps directory depth at 16, total nodes at 15,000, folders at 700, pages per folder/Images at 120, and per-file metadata lookups at 400. Folder pagination and the exact child-directory parameter still need confirmation in authenticated Chrome; unexpectedly returned parents are rejected rather than fabricated as nested files. API changes, 429 cooldowns, network errors or account switching may interrupt a scan. A scan is foreground-only and stops when its content-script Port disconnects. No background Library polling is enabled.
+
+**Not in this build:** Library binary downloads; bulk Vault export of Library originals; selection checkboxes; native Spaces / Pages / Sites and their automations; external Google Drive/OneDrive downloads; Memory (account or Project). No new Chrome permissions.
+
+### First-run checks
+
+- On Personal/Free: confirm the inventory can include gallery-only images absent from the Library root list. Compare summary counts with the ChatGPT UI and with the JSON report. Verify origin grouping for one known uploaded file and one known generated image.
+- On Business: compare the Space file view with the Library portion of the catalog. Inspect any nested-directory warnings; do not interpret a `partial` scan as a definitive complete file inventory.
+- Switch Workspace while the scan is active. The scan should stop and should never display the previous workspace's list under the new account.
+- Search by a name or extension; confirm origin groups remain separate. Download the **catalog JSON** and confirm it contains no `sig=`, signed URLs, authorization values, file contents or Memory.
+- Existing v0.1.6.9 chat export, Vault handling, schedules and optional background sync must work as before.
+
+---
+
+## Historical v0.1.6.9 notes
+
 # Chat Archive Exporter v0.1.6.9 — Schedules and chat metadata (test build)
 
 ## Behaviour in v0.1.6.9
@@ -24,7 +133,7 @@ This is still a **technology demonstrator**, not the production UX. Keep the ins
 6. Check GPT group titles in the selection list, switching only among tabs of the **same authenticated workspace**. Verify a session/workspace switch interrupts the original job without writing neighbor data.
 7. Confirm unchanged background settings do not produce a new configuration write, and a first empty-Project export can seed opt-in monitoring without any chat files.
 
-**Known constraints:** Internal ChatGPT endpoints are not a stable public API. Paging across more than 25 Schedules was simulated, not confirmed on a live account. Scheduled changes are observed at polling intervals, not recorded as a complete event history. Native installed-extension testing with authenticated ChatGPT/Chrome Downloads/File System Access remains necessary. More detailed UX/settings belong to v0.1.7; Library/Spaces/Images file inventories are postponed to v0.1.6.10.
+**Known constraints for v0.1.6.9:** Internal ChatGPT endpoints are not a stable public API. Paging across more than 25 Schedules was simulated, not confirmed on a live account. Scheduled changes are observed at polling intervals, not recorded as a complete event history. Native installed-extension testing with authenticated ChatGPT/Chrome Downloads/File System Access remains necessary. More detailed UX/settings belong to v0.1.7; Library/Spaces/Images file inventories are postponed to v0.1.6.10.
 
 ---
 

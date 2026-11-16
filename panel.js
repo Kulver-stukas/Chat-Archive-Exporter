@@ -9,6 +9,8 @@
     connecting: null, listLoading: null, listAccountId: null, listLoadedAt: 0,
     nextAutoAttempt: 0, autoFailures: 0, reconnectTimer: null,
     vaultPermission: 'unknown',
+    library: null, libraryAccountId: null, libraryLoadedAt: 0, libraryLoading: null,
+    libraryJob: null, librarySelected: new Set(), libraryCatalogRevision: -1, libraryRefresh: null, librarySubmitting: false,
   };
   const CHAT_URL = /^https:\/\/(chatgpt\.com|chat\.openai\.com)(\/|$)/i;
   const LIST_MAX_AGE_MS = 5 * 60_000;
@@ -67,8 +69,8 @@
   function fail(error) { status(error?.message || String(error)); log('ERROR: ' + (error?.message || error)); }
   function markBusy(value) {
     state.busy = value;
-    for (const id of ['loadAll', 'exportCurrent', 'exportSelected', 'pickFolder', 'snapshotSettings', 'reconnect', 'modeCurrent', 'modeAll', 'outputDownload', 'outputFolder', 'authorizeVault', 'clearSelection', 'selectAll', 'search','syncApply','syncEnabled','syncScope','syncEnrollment','syncSources']) $(id).disabled = value;
-    $('cancel').classList.toggle('hidden', !value);
+    for (const id of ['refreshLibrary', 'downloadLibraryCatalog', 'librarySearch', 'libraryContextFilter', 'modeLibrary', 'loadAll', 'exportCurrent', 'exportSelected', 'pickFolder', 'snapshotSettings', 'reconnect', 'modeCurrent', 'modeAll', 'outputDownload', 'outputFolder', 'authorizeVault', 'clearSelection', 'selectAll', 'search','syncApply','syncEnabled','syncScope','syncEnrollment','syncSources']) $(id).disabled = value;
+    $('cancel').classList.toggle('hidden', !value || state.mode === 'library');
     for (const el of $('groupList').querySelectorAll('input, button')) el.disabled = value;
     if (!value) { refreshButtons(); updateSyncApply(); scheduleReconnect(150); }
   }
@@ -76,20 +78,34 @@
     $('exportCurrent').disabled = state.busy || !state.port || !state.scope?.currentId;
     $('exportSelected').disabled = state.busy || !state.port || !(state.selected.size||state.selectedProjects.size);
     $('snapshotSettings').disabled = state.busy || !state.port || !state.scope?.observed;
+    $('refreshLibrary').disabled = state.busy || state.librarySubmitting || !!state.libraryJob?.job?.active || !state.port || !state.scope?.observed;
+    $('downloadLibraryCatalog').disabled = !state.library || state.libraryAccountId !== libraryAccount();
+    refreshLibraryControls();
     $('selectedCount').textContent = `${state.selected.size} chats + ${state.selectedProjects.size} empty projects selected`;
     $('currentTitle').textContent = state.scope?.currentId
       ? `Conversation: ${state.scope.currentId}`
       : 'Open a conversation on chatgpt.com/c/… to export it.';
   }
+  function applyModeView(name) {
+    for (const [id,value] of [['modeCurrent','current'],['modeAll','all'],['modeLibrary','library']])
+      $(id).classList.toggle('selected',name===value);
+    $('currentSection').classList.toggle('hidden',name!=='current');
+    $('allSection').classList.toggle('hidden',name!=='all');
+    $('librarySection').classList.toggle('hidden',name!=='library');
+    // Chat export output and background settings are not Library operations.
+    $('folderSection').classList.toggle('hidden',name==='library');
+    $('syncSection').classList.toggle('hidden',name==='library');
+    if(!manualJob?.active) $('manualHint').textContent=name==='library'
+      ? 'Library jobs run independently of this panel. Start manually; use Stop / pause to stop collection. Originals are opt-in only.'
+      : 'Manual exports continue after this panel closes.';
+  }
   function mode(name) {
-    if (state.busy) return;
+    if (state.busy || !['current','all','library'].includes(name)) return;
     state.mode = name;
-    $('modeCurrent').classList.toggle('selected', name === 'current');
-    $('modeAll').classList.toggle('selected', name === 'all');
-    $('currentSection').classList.toggle('hidden', name !== 'current');
-    $('allSection').classList.toggle('hidden', name !== 'all');
+    applyModeView(name);
     refreshButtons();
     if (name === 'all') ensureListLoaded().catch(error => { if (!state.busy) fail(error); });
+    if (name === 'library') refreshLibraryState(true).catch(fail);
   }
   function call(type, data = {}, progress = null, timeoutMs = 150000) {
     if (!state.port) return Promise.reject(new Error('No ChatGPT connection. Use Reconnect.'));
@@ -179,9 +195,14 @@
     if (state.scope?.accountId && scope.accountId && state.scope.accountId !== scope.accountId) {
       state.chats = []; state.selected.clear();state.selectedProjects.clear(); state.listAccountId = null; state.listLoadedAt = 0;
       state.sync = null; state.syncLoaded = false; renderChats();
+      state.library=null; state.libraryAccountId=null; state.libraryLoadedAt=0; state.libraryJob=null; state.librarySelected.clear(); state.libraryCatalogRevision=-1; renderLibrary();
       log('Workspace changed. Previous chat selection cleared.');
     }
+    if(state.libraryAccountId && state.libraryAccountId!==scope.accountId){
+      state.library=null;state.libraryAccountId=null;state.libraryJob=null;state.librarySelected.clear();state.libraryCatalogRevision=-1;
+    }
     state.scope = scope;
+    if(state.mode==='library')renderLibrary();
     rememberVerifiedWorkspace(scope,tab);
     // A workspace can have its own already-authorized Vault binding. It wins
     // over the globally last-chosen folder when returning to that workspace.
@@ -195,6 +216,7 @@
     if(manualJob?.active)showManual(manualJob);else status('Connected.');
     await refreshSync().catch(error => log('WARNING: Background status unavailable: ' + error.message));
     if (state.mode === 'all'&&!manualJob?.active) ensureListLoaded().catch(error => log('WARNING: Could not load conversations: ' + error.message));
+    if (state.mode === 'library') refreshLibraryState(true).catch(error => log('WARNING: Could not read saved Library state: ' + error.message));
     if (!scope.observed) log('WARNING: Active workspace ID was not confirmed by the session API. Do not bulk export until the workspace is verified.');
     return scope;
   }
@@ -339,6 +361,148 @@
     state.listLoading = p;
     return p;
   }
+  function renderLibrary() {
+    const target=$('libraryGroups');target.replaceChildren();
+    const catalog=state.libraryAccountId===libraryAccount()?state.library:null;
+    if(!catalog){
+      $('librarySummary').textContent='No saved inventory for this workspace. Choose a Vault, then Start inventory.';
+      $('libraryCount').textContent='No inventory loaded.';
+      $('libraryWarnings').classList.add('hidden');refreshButtons();return;
+    }
+    const summary=catalog.summary||{};
+    const parts=[`${summary.total||0} distinct files`,`Library: ${summary.library_files||0}`,`Images: ${summary.images_gallery||0}`,
+      `not in Library: ${summary.image_only||0}`,`Project Sources: ${summary.by_context?.project_source||0}`,
+      `folders: ${summary.folders||0}`,`listing: ${catalog.status||'unknown'}`,
+      `descriptors: ${catalog.classification_status||'unknown'}`,`origins classified: ${summary.classified??0}/${summary.total||0}`,`Sources excluded: ${summary.project_source_excluded||0}`];
+    $('librarySummary').textContent=parts.join(' · ')+'.';
+    const needle=$('librarySearch').value.trim().toLocaleLowerCase();
+    const context=$('libraryContextFilter').value;
+    const filtered=(catalog.items||[]).filter(x=>{
+      if(context!=='all' && !(x.contexts||[]).includes(context))return false;
+      return !needle || [x.name,x.mime_type,x.format_class,...(x.library_locations||[]).map(y=>y.folder_path),
+        ...(x.placements||[]).flatMap(p=>[p.project_name,p.type,p.conversation_id])]
+        .filter(Boolean).join(' ').toLocaleLowerCase().includes(needle);
+    });
+    const groupDefs=[['uploaded','image','Uploaded · Images'],['uploaded','file','Uploaded · Other files'],
+      ['generated','image','Generated · Images'],['generated','file','Generated · Other files'],
+      ['unknown','image','Unknown origin · Images'],['unknown','file','Unknown origin · Other files']];
+    for(const [origin,media,title] of groupDefs){
+      const files=filtered.filter(x=>x.origin===origin&&x.media_class===media);
+      if(!files.length)continue;
+      const section=document.createElement('section');section.className='group';
+      const head=document.createElement('div');head.className='group-head';
+      const label=document.createElement('span');label.className='group-name';label.textContent=title;
+      const count=document.createElement('span');count.className='group-count';count.textContent=String(files.length);
+      head.append(label,count);section.append(head);
+      for(const f of files){
+        const row=document.createElement('div');row.className='library-row';
+        const eligible=f.archive_eligibility?.selectable&&!f.managed_by_project_sources;
+        if(eligible){
+          const box=document.createElement('input');box.type='checkbox';box.className='library-file-checkbox';
+          box.dataset.fileId=f.id;box.dataset.archived=String(['saved','already_archived'].includes(f.archive?.status));box.setAttribute('aria-label','Archive '+(f.name||f.id));box.title=f.archive_eligibility.reason;
+          box.checked=state.librarySelected.has(f.id);
+          box.disabled=!!state.libraryJob?.job?.active||['saved','already_archived'].includes(f.archive?.status);
+          box.addEventListener('change',()=>{box.checked?state.librarySelected.add(f.id):state.librarySelected.delete(f.id);refreshLibraryControls();});
+          row.append(box);
+        }
+        const titleSpan=document.createElement('span');titleSpan.className='chat-text';titleSpan.textContent=f.name || f.id;
+        const note=document.createElement('span');note.className='library-note';
+        note.textContent=[f.format_class,f.origin_status!=='confirmed'?f.origin_status:null,
+          f.managed_by_project_sources?'Excluded: managed by Project Sources':null,
+          f.archive?`Archive: ${f.archive.status}${f.archive.http_status?' (HTTP '+f.archive.http_status+')':''}`:null,
+          ...(f.placements||[]).filter(p=>p.type==='project_source').map(p=>`Project Source: ${p.project_name}`),
+          f.library_locations?.[0]?.folder_path ? `Library: ${f.library_locations[0].folder_path}` : null,
+          f.contexts?.includes('conversation_message') ? 'Conversation reference (role unknown)' : null,
+          f.sources?.includes('library')&&f.sources?.includes('images')?'Library + Images':null].filter(Boolean).join(' · ');
+        row.append(titleSpan,note);section.append(row);
+      }
+      target.append(section);
+    }
+    if(!filtered.length){const p=document.createElement('p');p.className='hint';p.style.padding='8px';p.textContent='No matching files.';target.append(p);}
+    $('libraryCount').textContent=`Showing ${filtered.length} of ${catalog.items.length} distinct files`;
+    const warnings=catalog.warnings||[];
+    $('libraryWarnings').textContent=warnings.join('\n');
+    $('libraryWarnings').classList.toggle('hidden',!warnings.length);
+    refreshButtons();
+  }
+
+  function libraryAccount(){return state.scope?.accountId||state.lastVerifiedWorkspace?.accountId||null;}
+  function refreshLibraryControls(){
+    const j=state.libraryJob,active=!!j?.job?.active,verified=state.scope?.observed&&state.scope?.accountId===libraryAccount();
+    $('libraryStop').disabled=!(active||j?.enabled);
+    $('libraryResume').classList.toggle('hidden',!j?.job||!['waiting_for_tab','permission_required','error','retry_wait','cooldown'].includes(j.job.status));
+    $('libraryMonitor').disabled=!j?.baseline_at||active||!verified;
+    $('libraryMonitor').checked=!!j?.enabled;
+    $('libraryPickVault').disabled=active||!!j?.enabled||!!state.sync?.enabled||state.busy;
+    $('libraryGrantVault').classList.toggle('hidden',!state.directory||state.vaultPermission==='granted');
+    $('libraryVaultName').textContent=state.directory?`Vault: ${state.directory.name} (${state.vaultPermission})`:'Choose a Vault before starting.';
+    $('libraryArchive').disabled=!verified||active||state.librarySubmitting||!j?.baseline_at||!state.librarySelected.size;
+    $('librarySelectAll').disabled=active||!state.library;
+    for(const box of $('libraryGroups').querySelectorAll('.library-file-checkbox'))box.disabled=active||box.dataset.archived==='true';
+    $('librarySelectedCount').textContent=`${state.librarySelected.size} selected`;
+    const job=j?.job;
+    $('libraryJobStatus').textContent=job?`${job.status}: ${job.detail}`:'Idle. Start inventory is the only initial scan trigger.';
+  }
+  async function refreshLibraryState(includeCatalog=false){
+    const account=libraryAccount();if(!account)return;
+    if(state.libraryRefresh){await state.libraryRefresh;if(includeCatalog)return refreshLibraryState(true);return;}
+    const operation=(async()=>{
+      let j=await syncCommand('CAE_LIBRARY_JOB_STATUS',{accountId:account,withCatalog:includeCatalog});
+      if(libraryAccount()!==account)return;
+      if(j&&!includeCatalog&&j.catalog_revision!==state.libraryCatalogRevision)
+        j=await syncCommand('CAE_LIBRARY_JOB_STATUS',{accountId:account,withCatalog:true});
+      if(libraryAccount()!==account)return;
+      state.libraryJob=j;
+      if(!j){state.library=null;state.libraryAccountId=null;state.librarySelected.clear();state.libraryCatalogRevision=-1;renderLibrary();}
+      if(j?.catalog){
+        state.library=j.catalog;state.libraryAccountId=account;state.libraryCatalogRevision=j.catalog_revision;
+        const archived=new Set(j.catalog.items.filter(x=>['saved','already_archived'].includes(x.archive?.status)).map(x=>x.id));
+        for(const id of archived)state.librarySelected.delete(id);
+        renderLibrary();
+      }
+      if(j?.job?.active||j?.enabled){
+        const bound=await ChatArchiveLibraryStore.directory(account);
+        if(bound&&libraryAccount()===account)state.directory=bound;
+      }
+      refreshButtons();refreshLibraryControls();
+    })().finally(()=>{if(state.libraryRefresh===operation)state.libraryRefresh=null;});
+    state.libraryRefresh=operation;return operation;
+  }
+  async function startLibrary(){
+    if(state.librarySubmitting)return;
+    try{
+      if(!state.scope?.observed||!state.scope.accountId||!state.tab?.id)throw Error('Connect the active ChatGPT workspace first.');
+      if(!state.directory)throw Error('Choose a Vault first.');
+      // Directly initiated by the click; no permission request from a timer.
+      if(!(await ChatArchiveVault.hasPermission(state.directory,true)))throw Error('Vault write access is required.');
+      const account=state.scope.accountId;
+      state.librarySubmitting=true;refreshButtons();
+      await ChatArchiveLibraryStore.bind(account,state.directory);
+      await ChatArchiveVault.rememberWorkspaceDirectory(account,state.directory);
+      state.libraryJob=await syncCommand('CAE_LIBRARY_JOB_START',{options:{accountId:account,display:state.scope.display,
+        tabId:state.tab.id,monitor:$('libraryMonitorOnStart').checked}});
+      status('Library inventory accepted. You may switch sections or close this panel.');
+      await refreshLibraryState(true);
+    }catch(e){fail(e);}finally{state.librarySubmitting=false;refreshButtons();}
+  }
+  async function archiveLibrarySelection(){
+    if(state.librarySubmitting)return;
+    try{
+      if(!state.scope?.observed)throw Error('Reconnect the original workspace first.');
+      state.librarySubmitting=true;refreshButtons();
+      state.libraryJob=await syncCommand('CAE_LIBRARY_JOB_ARCHIVE',{options:{accountId:state.scope.accountId,
+        tabId:state.tab?.id,ids:[...state.librarySelected]}});
+      status('Selected originals queued. Existing archived copies will not be duplicated.');
+      await refreshLibraryState(true);
+    }catch(e){fail(e);}finally{state.librarySubmitting=false;refreshButtons();}
+  }
+  function downloadLibrary(){
+    if(!state.library||state.libraryAccountId!==libraryAccount())return;
+    const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+    const bytes=JSON.stringify(state.library,null,2)+'\n';
+    downloadBlob(new Blob([bytes],{type:'application/json'}),`CAE-Library-Inventory-${stamp}.json`);
+    status('Metadata catalog prepared. No original files were downloaded.');
+  }
   let lifecyclePort=null, vaultStatusRun=null;
   let holderReadyKey='', holderReadyAt=0, holderReadyPending=null;
   function notifyPanelPermission(permission) {
@@ -425,7 +589,7 @@
     await refreshVaultStatus();
   }
   async function selectFolder() {
-    if (state.sync?.enabled) throw new Error('Pause background update before changing the Vault for this workspace.');
+    if (state.sync?.enabled || state.libraryJob?.enabled || state.libraryJob?.job?.active) throw new Error('Pause background updates and Library jobs before changing the Vault.');
     if (typeof window.showDirectoryPicker !== 'function')
       throw new Error('Directory picker unavailable. Use Chrome with File System Access support.');
     // Picker must be invoked directly from the click gesture, before other awaits.
@@ -433,7 +597,7 @@
     state.directory = dir;
     try { await ChatArchiveVault.rememberDirectory(dir); }
     catch (e) { log('WARNING: This Vault can be used now, but its folder handle could not be remembered: ' + e.message); }
-    await refreshVaultStatus();
+    await refreshVaultStatus();refreshLibraryControls();
     status('Vault selected. Existing files and indexes will be reused.');
   }
   async function grantVaultAccess() {
@@ -443,6 +607,8 @@
     await refreshVaultStatus();
     if(state.sync?.enabled)await retainGrantedVault();
     await syncCommand('CAE_MANUAL_WAKE',{accountId:state.scope?.accountId}).catch(()=>{});
+    if(libraryAccount())await syncCommand('CAE_LIBRARY_JOB_RESUME',{accountId:libraryAccount()}).catch(()=>{});
+    refreshLibraryControls();
     status('Vault write access granted; accepted jobs may resume.');
   }
   function downloadBlob(blob, name) {
@@ -472,10 +638,7 @@
       $('outputDownload').checked=j.destination!=='vault';
       $('folderControls').classList.toggle('hidden',j.destination!=='vault');
       state.mode=j.mode;
-      $('modeCurrent').classList.toggle('selected',j.mode==='current');
-      $('modeAll').classList.toggle('selected',j.mode==='all');
-      $('currentSection').classList.toggle('hidden',j.mode!=='current');
-      $('allSection').classList.toggle('hidden',j.mode!=='all');
+      applyModeView(j.mode);
     }
     if (state.busy !== busy && !state.listLoading) markBusy(busy);
     $('progress').classList.remove('hidden');
@@ -688,6 +851,36 @@
   });
   $('modeCurrent').addEventListener('click', () => mode('current'));
   $('modeAll').addEventListener('click', () => mode('all'));
+  $('modeLibrary').addEventListener('click', () => mode('library'));
+  $('refreshLibrary').addEventListener('click', startLibrary);
+  $('libraryPickVault').addEventListener('click',()=>selectFolder().catch(fail));
+  $('libraryGrantVault').addEventListener('click',()=>grantVaultAccess().catch(fail));
+  $('libraryStop').addEventListener('click',async()=>{
+    try{await syncCommand('CAE_LIBRARY_JOB_STOP',{accountId:libraryAccount()});await refreshLibraryState(true);}catch(e){fail(e);}
+  });
+  $('libraryResume').addEventListener('click',async()=>{
+    try{await syncCommand('CAE_LIBRARY_JOB_RESUME',{accountId:libraryAccount()});await refreshLibraryState(true);}catch(e){fail(e);}
+  });
+  $('libraryMonitor').addEventListener('change',async()=>{
+    try{await syncCommand('CAE_LIBRARY_JOB_MONITOR',{accountId:libraryAccount(),enabled:$('libraryMonitor').checked});await refreshLibraryState();}catch(e){fail(e);refreshLibraryControls();}
+  });
+  $('libraryArchive').addEventListener('click',archiveLibrarySelection);
+  $('libraryClear').addEventListener('click',()=>{state.librarySelected.clear();$('librarySelectAll').checked=false;renderLibrary();});
+  $('librarySelectAll').addEventListener('change',()=>{
+    for(const box of $('libraryGroups').querySelectorAll('.library-file-checkbox:not(:disabled)')){
+      box.checked=$('librarySelectAll').checked;
+      box.checked?state.librarySelected.add(box.dataset.fileId):state.librarySelected.delete(box.dataset.fileId);
+    }refreshLibraryControls();
+  });
+  let libraryStatusTimer=null;
+  chrome.storage.onChanged.addListener((changes,area)=>{
+    if(area==='local'&&changes['cae.library-status.v1']?.newValue?.account_id===libraryAccount()){
+      clearTimeout(libraryStatusTimer);libraryStatusTimer=setTimeout(()=>refreshLibraryState().catch(fail),200);
+    }
+  });
+  $('downloadLibraryCatalog').addEventListener('click', downloadLibrary);
+  $('librarySearch').addEventListener('input', renderLibrary);
+  $('libraryContextFilter').addEventListener('change', renderLibrary);
   $('pickFolder').addEventListener('click', () => selectFolder().catch(fail));
   $('authorizeVault').addEventListener('click', () => grantVaultAccess().catch(fail));
   for (const id of ['outputDownload', 'outputFolder']) $(id).addEventListener('change', () => $('folderControls').classList.toggle('hidden', !$('outputFolder').checked));

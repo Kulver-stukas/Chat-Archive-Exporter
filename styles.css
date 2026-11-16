@@ -21,3 +21,18 @@ progress{width:100%;height:9px;accent-color:#168b80;margin-top:10px}.log{max-hei
 .sync-field select { width:100%; padding:7px; border:1px solid #8886; border-radius:6px; color:inherit; background:light-dark(white, #202327); }
 #syncStatus { white-space:pre-wrap; }
 #syncLog { max-height:130px; }
+
+/* v0.1.6.10 rev.1 read-only Library inventory. */
+.library-row{display:flex;flex-direction:column;gap:3px;padding:7px 10px 7px 15px;border-bottom:1px solid light-dark(#edf0f2,#31363a);line-height:1.35;font-size:12px;overflow-wrap:anywhere}
+.library-row:last-child{border-bottom:0}
+.library-note{color:light-dark(#687581,#a5afb9);font-size:10.5px}
+#libraryGroups{max-height:53vh}
+#libraryWarnings{max-height:115px;margin-top:10px}
+
+/* Library selection: no remote previews or executable content. */
+.library-row { position: relative; }
+.library-row:has(.library-file-checkbox) { padding-left: 30px; }
+.library-file-checkbox { position: absolute; left: 7px; top: 10px; }
+#libraryJobStatus { overflow-wrap: anywhere; }
+#libraryArchive { max-width: 190px; }
+#librarySelectedCount { flex: 1; }

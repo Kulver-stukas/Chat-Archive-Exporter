@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Chat Archive Exporter",
   "description": "ChatGPT Markdown and original-source export to Vault, with opt-in workspace-scoped background updates.",
-  "version": "0.1.6.9",
+  "version": "0.1.6.11",
   "minimum_chrome_version": "116",
   "permissions": [
     "sidePanel",
@@ -37,6 +37,7 @@
         "lib/normalize.js",
         "lib/config-inventory.js",
         "lib/source-transfer.js",
+        "lib/library-inventory.js",
         "lib/api.js",
         "content.js",
         "sync-watch.js"
@@ -44,5 +45,5 @@
       "run_at": "document_idle"
     }
   ],
-  "version_name": "0.1.6.9 schedules + chat metadata demonstrator"
+  "version_name": "0.1.6.11 rev.1 - On-demand Library, new-file monitoring and selected originals"
 }

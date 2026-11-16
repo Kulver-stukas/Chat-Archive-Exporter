@@ -1,7 +1,23 @@
 importScripts('lib/normalize.js','lib/config-inventory.js','lib/hash.js','lib/paths.js','lib/meta.js','lib/sources.js',
-  'lib/vault.js','lib/vault-transfer.js','lib/sync-policy.js','lib/sync-spool.js','lib/sync-rpc.js','lib/vault-context.js','lib/vault-diagnostics.js','lib/sync.js','lib/tab-bootstrap.js','lib/manual-store.js','lib/manual-jobs.js');
+  'lib/vault.js','lib/vault-transfer.js','lib/sync-policy.js','lib/sync-spool.js','lib/sync-rpc.js','lib/vault-context.js','lib/vault-diagnostics.js','lib/sync.js','lib/tab-bootstrap.js','lib/manual-store.js','lib/manual-jobs.js',
+  'lib/library-inventory.js','lib/library-policy.js','lib/library-store.js','lib/library-vault.js','lib/library-jobs.js');
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type?.startsWith('CAE_LIBRARY_JOB_')) {
+    if(sender.id !== chrome.runtime.id || sender.tab || message.target)return false;
+    const L=globalThis.ChatArchiveLibraryJobs;
+    const actions={
+      CAE_LIBRARY_JOB_START:()=>L.start(message.options||{}),
+      CAE_LIBRARY_JOB_STATUS:()=>L.inspect(message.accountId,message.withCatalog!==false),
+      CAE_LIBRARY_JOB_STOP:()=>L.stop(message.accountId),
+      CAE_LIBRARY_JOB_MONITOR:()=>L.monitor(message.accountId,message.enabled===true),
+      CAE_LIBRARY_JOB_RESUME:()=>L.resume(message.accountId),
+      CAE_LIBRARY_JOB_ARCHIVE:()=>L.submitArchive(message.options||{})
+    };
+    if(!actions[message.type])return false;
+    actions[message.type]().then(result=>sendResponse({ok:true,result}),e=>sendResponse({ok:false,error:String(e?.message||e)}));
+    return true;
+  }
   // The manual controller accepts commands only from extension UI pages.
   if (message?.type?.startsWith('CAE_MANUAL_')) {
     if (sender.id !== chrome.runtime.id || message.target) return false;
@@ -68,6 +84,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 chrome.alarms.onAlarm.addListener(a=>{
   if(a.name===ChatArchiveSync.ALARM)ChatArchiveSync.tick().catch(console.warn);
+  if(a.name===globalThis.ChatArchiveLibraryJobs?.ALARM)ChatArchiveLibraryJobs.tick().catch(console.warn);
   if(a.name===ChatArchiveManualJobs.ALARM)ChatArchiveManualJobs.tick().catch(console.warn);
 });
 chrome.downloads.onChanged.addListener(d=>ChatArchiveManualJobs.downloadChanged(d).catch(console.warn));
@@ -103,6 +120,7 @@ chrome.windows.onFocusChanged.addListener(async id=>{
 const startBackground=async()=>{
   await ChatArchiveSync.startup();
   await ChatArchiveManualJobs.startup();
+  await globalThis.ChatArchiveLibraryJobs?.startup();
 };
 chrome.runtime.onStartup.addListener(()=>startBackground().catch(console.warn));
 chrome.runtime.onInstalled.addListener(info=>{

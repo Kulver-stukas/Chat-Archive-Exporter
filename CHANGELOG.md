@@ -1,3 +1,36 @@
+## v0.1.6.11 rev.1 - 2026-11-16 (test build)
+
+- Remove implicit full Library rescans on section entry, reconnect, tab activation and cache expiry; explicit Start and durable Stop/pause instead.
+- Add worker-owned, checkpointed Library jobs with per-workspace IDB state, Vault binding, alarm recovery, rate-limit persistence and independent panel navigation.
+- Commit the initial inventory to `_Library/_inventory.json`; preserve its baseline and optionally monitor only new post-baseline file IDs. Reuse known descriptor metadata; no automatic retries of older unknowns or descriptor backfill.
+- Exclude verified Project Sources from enrichment/Library original archival while keeping their references; do not infer Source membership from names, folder names or `use_case:gizmo`.
+- Add selection checkboxes and explicit streamed original archival, grouping by origin and Images/Files, deterministic ID-suffixed paths, per-file reports, SHA-256 verification and local-edit protection.
+- Recover a completed original from a staged checksum receipt if its index commit was interrupted. Do not retry HTTP 415 automatically. Respect API cooldowns and 512 MiB/file, 1 GiB/run caps.
+- No new permissions; no native Page/Space content, Memory, external provider content, remote mutations or automatic original downloads.
+- Tests: 52 Node.js suites and six Chromium UI smoke suites passed. Two local-HTTP browser suites and the installed-MV3 end-to-end attempt were blocked/unavailable in the managed test browser; live authorized Chrome UAT remains required.
+
+---
+
+## v0.1.6.10 rev.2 — File provenance vs. placements (test build, 2026-11-16)
+
+- Model one Library/Images physical file by `file_id`, with separate, potentially many-to-many `placements`: Library directory, verified Project Source, observed conversation/message reference and generated Images gallery. Do **not** invent a direct UI URL or a message role. An unresolved UI URL is `null` with `url_status: not_observed`.
+- Correlate Project Source file references from verified current-workspace Project detail APIs by exact `file_id` or `library_file_id`; never by folder or filename. Unmatched source references remain in `unmatched_project_refs` instead of becoming fictitious Library originals.
+- A file's origin (Uploaded / Generated / Unknown) is not its placement. A `gizmo` Project Source, `codex` pipeline, or `upload_source:user` transport field does not prove content authorship. `caas` is tentatively generated/inferred. Keep conflicts and unknowns explicit.
+- Separate `status` (Library + Images enumeration) from `classification_status` (descriptor availability) and `links_status` (Project Source resolution), with independent diagnostics.
+- Increase descriptor safety limit to 1,200 and check two descriptors concurrently; retain account verification for every backend request, cooldown handling, and foreground cancellation. Normalize Unix gallery timestamps to ISO 8601.
+- Add a File context filter (Library, Project Sources, Conversation references, Gallery); existing six origin/media groups remain. The feature is still **read-only**: no original downloads, Vault writes, Pages, Memory, or automatic background Library jobs.
+- Exact prompt-vs-assistant-output role and Work-specific sandbox attachment classification require message/workflow evidence not provided by Library nodes. No assertion is made about a future Chat/Work UI merge.
+- Rev.1 was authenticated on three test account contexts. Rev.2 has local simulated tests only and requires an authenticated recheck, especially the new Project detail join and throughput.
+
+## v0.1.6.10 rev.1 — Read-only Library and Images catalog (2026-11-16)
+
+- New **Library / Images** side-panel mode: on-demand read-only metadata list, with search and six origin/media groups (Uploaded, Generated, Unknown × Images, Other files). It does not request or save original file content.
+- Enumerate Library nodes and the separate generated Images gallery in the **verified current workspace only**. Cursor paging, guarded recursive folder scans, gallery `s_...` vs physical `file_...` distinction, deduplication by physical file ID, and completeness/warning reporting.
+- Enrich eligible Library files via `GET /backend-api/files/{file_id}` (bounded, with rate-limit handling); classify using explicit `use_case` or verified gallery membership. Unknown/conflicting signals remain visible rather than being silently forced into Uploaded/Generated.
+- Manual **Catalog JSON** export contains only allowlisted metadata and diagnostic status; no signed URLs, auth credentials, original bytes, Memory, Pages or external source data. The feature is foreground-only; disconnect cancels the scan. No new permissions or changes to existing Vault data.
+- Added tests for provenance, nested directories, gallery-only images, conflicting evidence, ID and signed-URL safety, workspace switching, and Chromium panel behavior.
+- Live authenticated tests of directory recursion and per-file metadata throughput remain pending; this is a testing revision, not a public stable release.
+
 ## v0.1.6.9 — Schedules inventory and Vault metadata consistency (2026-11-15)
 
 - Added **read-only Schedules / Automations** inventory to the current-scope `_workspace_configuration.json`: scheduled, paused, and finished lists from `/backend-api/automations?filter=...&limit=25`, with cursor pagination, full returned prompts, original RRULE / VEVENT schedule, timezone, enabled state, notifications, source chat ID, and available timing/executor settings. Suggested automations and run histories are excluded. Each request is bound to a freshly verified active account; there is no sibling-account enumeration or Memory request.
