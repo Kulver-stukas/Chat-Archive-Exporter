@@ -6,12 +6,98 @@
     chats: [], projects: [], selected: new Set(), selectedProjects:new Set(), collapsed: new Set(), requests: new Map(), nextId: 1,
     busy: false, cancel: false, warnings: [], sync: null, syncLoaded: false, syncAccountId: null,
     lastVerifiedWorkspace: null,
-    connecting: null, listLoading: null, listAccountId: null, listLoadedAt: 0,
+    connecting: null, listLoading: null, listAccountId: null, listLoadedAt: 0, listCacheLoading: null, listSource: null, listLoadAccount: null,
     nextAutoAttempt: 0, autoFailures: 0, reconnectTimer: null,
     vaultPermission: 'unknown',
     library: null, libraryAccountId: null, libraryLoadedAt: 0, libraryLoading: null,
     libraryJob: null, librarySelected: new Set(), libraryCatalogRevision: -1, libraryRefresh: null, librarySubmitting: false,
   };
+
+  const SURFACE=document.body.dataset.surface||'panel';
+  const U=globalThis.CAEUIState;
+  let uiView=SURFACE==='options'?'settings':'export',prefs=U.preferences(),previousView='export';
+  let uiWindowId=null,libraryCollapsed=new Set(),libraryVisible=[],uiIntent=null;
+  const sourceTabId=Number(new URLSearchParams(location.search).get('tab'))||null;
+  function route(view){
+    if(!['export','activity','settings','tools'].includes(view))return;
+    // Settings and Tools are local views on every surface, including Side Panel.
+    previousView=uiView==='tools'?previousView:uiView;uiView=view;applyModeView(state.mode);
+    if(view==='activity'||view==='tools'||view==='settings'){
+      refreshManual().catch(fail);refreshSync().catch(fail);refreshLibraryState(true).catch(fail);
+    }
+  }
+  async function openOptions(view='settings'){
+    // Only explicit "open in tab" and directory-picker actions use this page.
+    // Reuse the existing settings tab instead of creating one for every click.
+    const tab=state.tab?.id||sourceTabId;
+    const base=chrome.runtime.getURL('options.html');
+    const url=base+(tab?'?tab='+tab:'')+'#'+view;
+    try{
+      const existing=(await chrome.tabs.query({})).find(t=>(t.url||'').startsWith(base));
+      if(existing?.id&&typeof chrome.tabs.update==='function'){
+        await chrome.tabs.update(existing.id,{url,active:true});
+        if(existing.windowId&&chrome.windows?.update)await chrome.windows.update(existing.windowId,{focused:true});
+      }else await chrome.tabs.create({url});
+    }catch(error){fail(error);}
+  }
+  function openPanel(name,refresh=false){
+    const windowId=state.tab?.windowId??uiWindowId;
+    if(!Number.isInteger(windowId)){status('Activate a browser window and reopen the popup.');return;}
+    // Call open in this click handler, before awaits: preserve the user gesture.
+    const intent={mode:name,refresh,at:Date.now(),nonce:crypto.randomUUID()};
+    const saved=chrome.storage.session.set({['cae.ui.intent.'+windowId]:intent});
+    const opened=chrome.sidePanel.open({windowId});
+    Promise.all([saved,opened]).then(()=>{if(SURFACE==='popup')window.close();}).catch(fail);
+  }
+  async function acceptedExport(){
+    if(SURFACE!=='panel'){route('activity');return;}
+    if($('keepPanelOpen').checked||!prefs.autoClosePanel){uiView='activity';applyModeView(state.mode);return;}
+    if(typeof chrome.sidePanel?.close!=='function'){
+      uiView='activity';applyModeView(state.mode);status('Accepted. This Chrome version cannot close the panel automatically.');return;
+    }
+    try{await chrome.sidePanel.close({windowId:uiWindowId??state.tab?.windowId});}
+    catch(e){uiView='activity';applyModeView(state.mode);status('Accepted. You can close the panel; the job continues.');}
+  }
+  function uiRefresh(){
+    const account=libraryAccount();const j=manualJob?.accountId===account?manualJob:null;
+    const a=U.activity(j,state.libraryJob,state.sync);
+    $('appIcon').src='icons/cae-'+a.icon+'-32.png';$('appIcon').alt=a.label;
+    $('overallStatus').textContent=a.label;
+    // A permission check in a newly opened UI document may return 'prompt'
+    // even while the background/offscreen writer still has a valid grant.
+    // Never describe that as Vault disconnection, or derive it from a canceled Save.
+    const bg=state.sync?.enabled&&state.sync?.access?.worker==='granted'&&state.sync?.access?.offscreen==='granted';
+    const permission={granted:'connected',prompt:bg?'background connected; confirm here':'confirmation required here',
+      denied:'access denied',no_handle:'not connected',unsupported:'permission check unavailable',
+      error:'permission check unavailable',unknown:'checking access'};
+    $('vaultBadge').textContent=state.directory?`Vault: ${state.directory.name} - ${permission[state.vaultPermission]||'checking access'}`:'Vault not selected';
+    $('headerReconnect').classList.toggle('hidden',!state.directory||state.vaultPermission==='granted');
+    $('headerReconnect').disabled=false;
+    $('quickVault').disabled=state.busy||!state.port||!state.scope?.observed||!state.scope.currentId||!state.directory||!$('currentSelect').checked;
+    $('showWidget').disabled=!state.scope?.observed||!state.tab;
+    $('showWidget').textContent='Show / hide widget on this tab';
+    $('toolsReconnectVault').disabled=!state.directory;
+    $('pickFolder').disabled=!!manualJob?.active||!!state.sync?.enabled||!!state.libraryJob?.enabled||!!state.libraryJob?.job?.active;
+    const summary=state.library?.summary;
+    $('inventoryBrief').textContent=state.libraryJob?.job?.active?U.humanStatus(state.libraryJob.job)+': '+(state.libraryJob.job.detail||''):
+      summary?`${summary.total||0} files in saved inventory. ${summary.selectable??0} originals requestable.`:'No saved inventory. Choose a Vault before starting.';
+    $('catalogStamp').textContent=state.library?.captured_at?'Saved catalog: '+new Date(state.library.captured_at).toLocaleString()+'. No scan on download.':'No saved catalog for this workspace.';
+    $('panelCloseHint').textContent=$('keepPanelOpen').checked||!prefs.autoClosePanel?'Panel stays open for monitoring.':
+      typeof chrome.sidePanel?.close==='function'?'Closes after export is accepted.':'Auto-close is unavailable in this Chrome version.';
+  }
+  async function savePreferences(){
+    prefs=U.preferences({theme:$('themeSelect').value,autoClosePanel:$('autoClosePanel').checked,
+      widgetEnabled:$('widgetEnabled').checked,monitorOnStart:$('libraryMonitorOnStart').checked});
+    await chrome.storage.local.set({[U.KEY]:prefs});applyPreferences();
+    // Visible existing tabs can obtain the optional UI without reloading the site.
+    if(prefs.widgetEnabled&&state.tab?.id)chrome.runtime.sendMessage({type:'CAE_UI_SHOW_WIDGET',tabId:state.tab.id}).catch(fail);
+  }
+  function applyPreferences(){
+    document.documentElement.dataset.theme=prefs.theme;
+    $('themeSelect').value=prefs.theme;$('autoClosePanel').checked=prefs.autoClosePanel;
+    $('widgetEnabled').checked=prefs.widgetEnabled;$('libraryMonitorOnStart').checked=prefs.monitorOnStart;
+    uiRefresh();
+  }
   const CHAT_URL = /^https:\/\/(chatgpt\.com|chat\.openai\.com)(\/|$)/i;
   const LIST_MAX_AGE_MS = 5 * 60_000;
   // A verified workspace is the identity of a background job, not the currently
@@ -60,52 +146,69 @@
     }catch(_err){}
     if(!state.scope)await refreshSync().catch(error=>log('WARNING: Workspace status unavailable: '+error.message));
   }
-  function status(message) { $('status').textContent = message; }
+  function status(message) { $('status').textContent = message; $('status').dataset.error='false'; }
   function log(message) {
     $('log').classList.remove('hidden');
     $('log').textContent = ($('log').textContent + `[${new Date().toLocaleTimeString()}] ${message}\n`).slice(-120000);
     $('log').scrollTop = $('log').scrollHeight;
   }
-  function fail(error) { status(error?.message || String(error)); log('ERROR: ' + (error?.message || error)); }
+  function fail(error) { status(error?.message || String(error)); $('status').dataset.error='true'; log('ERROR: ' + (error?.message || error)); }
+
   function markBusy(value) {
-    state.busy = value;
-    for (const id of ['refreshLibrary', 'downloadLibraryCatalog', 'librarySearch', 'libraryContextFilter', 'modeLibrary', 'loadAll', 'exportCurrent', 'exportSelected', 'pickFolder', 'snapshotSettings', 'reconnect', 'modeCurrent', 'modeAll', 'outputDownload', 'outputFolder', 'authorizeVault', 'clearSelection', 'selectAll', 'search','syncApply','syncEnabled','syncScope','syncEnrollment','syncSources']) $(id).disabled = value;
-    $('cancel').classList.toggle('hidden', !value || state.mode === 'library');
-    for (const el of $('groupList').querySelectorAll('input, button')) el.disabled = value;
-    if (!value) { refreshButtons(); updateSyncApply(); scheduleReconnect(150); }
+    state.busy=value;
+    // Manual jobs can be retained for a later Retry delivery even when no work
+    // is running. Chat-list metadata is read-only and must remain available.
+    for(const id of ['snapshotSettings','syncApply','pickFolder'])$(id).disabled=value;
+    // Navigation and filtering never own a job and remain usable during work.
+    refreshButtons();updateSyncApply();
+    if(!value)scheduleReconnect(150);
   }
-  function refreshButtons() {
-    $('exportCurrent').disabled = state.busy || !state.port || !state.scope?.currentId;
-    $('exportSelected').disabled = state.busy || !state.port || !(state.selected.size||state.selectedProjects.size);
-    $('snapshotSettings').disabled = state.busy || !state.port || !state.scope?.observed;
-    $('refreshLibrary').disabled = state.busy || state.librarySubmitting || !!state.libraryJob?.job?.active || !state.port || !state.scope?.observed;
-    $('downloadLibraryCatalog').disabled = !state.library || state.libraryAccountId !== libraryAccount();
-    refreshLibraryControls();
-    $('selectedCount').textContent = `${state.selected.size} chats + ${state.selectedProjects.size} empty projects selected`;
-    $('currentTitle').textContent = state.scope?.currentId
-      ? `Conversation: ${state.scope.currentId}`
-      : 'Open a conversation on chatgpt.com/c/… to export it.';
+  function refreshButtons(){
+    $('exportCurrent').disabled=state.busy||!state.port||!state.scope?.observed||!state.scope?.currentId||!$('currentSelect').checked;
+    $('exportSelected').disabled=state.busy||!state.port||!state.scope?.observed||!(state.selected.size||state.selectedProjects.size);
+    $('snapshotSettings').disabled=state.busy||!state.port||!state.scope?.observed||!state.directory;
+    $('refreshLibrary').disabled=state.busy||state.librarySubmitting||!!state.libraryJob?.job?.active||!state.port||!state.scope?.observed||!state.directory;
+    $('downloadLibraryCatalog').disabled=!state.library||state.libraryAccountId!==libraryAccount();
+    $('selectedCount').textContent=`${state.selected.size} chats${state.selectedProjects.size?' + '+state.selectedProjects.size+' empty Projects':''} selected`;
+    const hidden=state.chats.filter(c=>state.selected.has(c.id)&&!filteredChats().some(v=>v.id===c.id)).length;
+    if(hidden)$('selectedCount').textContent+=` (${hidden} hidden by filters)`;
+    $('exportSelected').textContent=$('outputFolder').checked?'Save selection to Vault':'Download selection ZIP';
+    const title=state.chats.find(c=>c.id===state.scope?.currentId)?.title||state.tab?.title?.replace(/\s*[-|]\s*ChatGPT$/i,'');
+    $('currentTitle').textContent=state.scope?.currentId?(title||'Current conversation'):'Open a ChatGPT conversation';
+    $('currentTitle').title=state.scope?.currentId||'';
+    refreshLibraryControls();uiRefresh();
   }
-  function applyModeView(name) {
-    for (const [id,value] of [['modeCurrent','current'],['modeAll','all'],['modeLibrary','library']])
-      $(id).classList.toggle('selected',name===value);
-    $('currentSection').classList.toggle('hidden',name!=='current');
-    $('allSection').classList.toggle('hidden',name!=='all');
-    $('librarySection').classList.toggle('hidden',name!=='library');
-    // Chat export output and background settings are not Library operations.
-    $('folderSection').classList.toggle('hidden',name==='library');
-    $('syncSection').classList.toggle('hidden',name==='library');
-    if(!manualJob?.active) $('manualHint').textContent=name==='library'
-      ? 'Library jobs run independently of this panel. Start manually; use Stop / pause to stop collection. Originals are opt-in only.'
-      : 'Manual exports continue after this panel closes.';
+  function applyModeView(name){
+    document.body.dataset.uiView=uiView;document.body.dataset.mode=name;
+    if(SURFACE==='panel'){
+      const header=$('librarySection').querySelector('h2');
+      if(!$('refreshLibrary').closest('#librarySection')){const row=document.createElement('div');row.className='row';header.replaceWith(row);row.append(header,$('refreshLibrary'));}
+      if(name==='all'){$('allSection').querySelector('.action-bar').prepend($('folderSection'));$('allSection').querySelector('.action-bar').append($('panelBehavior'));}
+      else if(name==='library')$('librarySection').querySelector('.action-bar').append($('panelBehavior'));
+      else $('currentSection').append($('panelBehavior'));
+    }
+    for(const node of document.querySelectorAll('[data-view]'))node.classList.toggle('hidden',node.dataset.view!==uiView);
+    for(const [id,value] of [['navExport','export'],['navActivity','activity'],['navSettings','settings']]){
+      $(id).classList.toggle('selected',uiView===value);$(id).setAttribute('aria-current',uiView===value?'page':'false');
+    }
+    for(const [id,value] of [['modeCurrent','current'],['modeAll','all'],['modeLibrary','library']])$(id).classList.toggle('selected',uiView==='export'&&name===value);
+    $('modeMonitor').classList.toggle('selected',uiView==='activity');
+    if(uiView==='export'){
+      $('currentSection').classList.toggle('hidden',SURFACE==='panel'&&name!=='current');
+      $('allSection').classList.toggle('hidden',SURFACE!=='panel'||name!=='all');
+      $('librarySection').classList.toggle('hidden',SURFACE!=='panel'||name!=='library');
+      $('inventorySection').classList.toggle('hidden',SURFACE==='panel'&&name!=='library');
+      $('folderSection').classList.toggle('hidden',SURFACE!=='panel'||name!=='all');
+    }
+    $('folderControls').classList.remove('hidden');
   }
-  function mode(name) {
-    if (state.busy || !['current','all','library'].includes(name)) return;
-    state.mode = name;
-    applyModeView(name);
-    refreshButtons();
-    if (name === 'all') ensureListLoaded().catch(error => { if (!state.busy) fail(error); });
-    if (name === 'library') refreshLibraryState(true).catch(fail);
+  function mode(name){
+    if(!['current','all','library'].includes(name))return;
+    if(SURFACE!=='panel'&&name!=='current'){openPanel(name);return;}
+    state.mode=name;uiView='export';applyModeView(name);refreshButtons();
+    if(name==='library'&&!state.libraryJob?.job?.active)status('Saved inventory. Refresh is manual.');
+    if(name==='all')ensureListLoaded().catch(fail);
+    if(name==='library')refreshLibraryState(true).catch(fail);
   }
   function call(type, data = {}, progress = null, timeoutMs = 150000) {
     if (!state.port) return Promise.reject(new Error('No ChatGPT connection. Use Reconnect.'));
@@ -126,7 +229,7 @@
     state.requests.clear();
   }
   async function connectActive(auto = false, force = false) {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab=sourceTabId?await chrome.tabs.get(sourceTabId).catch(()=>null):(await chrome.tabs.query({active:true,currentWindow:true}))[0];
     if (!tab || !CHAT_URL.test(tab.url || '')) {
       if (state.port) disconnect();
       state.tab = null;
@@ -190,10 +293,10 @@
         }
       }
     });
-    const scope = await call('CAE_STATUS', {}, null, 12000);
+    const scope = await call('CAE_STATUS', {force:force===true}, null, 12000);
     if(state.port!==activePort)return null; // A tab change may invalidate an in-flight reply.
     if (state.scope?.accountId && scope.accountId && state.scope.accountId !== scope.accountId) {
-      state.chats = []; state.selected.clear();state.selectedProjects.clear(); state.listAccountId = null; state.listLoadedAt = 0;
+      state.chats = []; state.selected.clear();state.selectedProjects.clear(); state.listAccountId = null; state.listLoadedAt = 0; state.listSource = null;
       state.sync = null; state.syncLoaded = false; renderChats();
       state.library=null; state.libraryAccountId=null; state.libraryLoadedAt=0; state.libraryJob=null; state.librarySelected.clear(); state.libraryCatalogRevision=-1; renderLibrary();
       log('Workspace changed. Previous chat selection cleared.');
@@ -201,22 +304,25 @@
     if(state.libraryAccountId && state.libraryAccountId!==scope.accountId){
       state.library=null;state.libraryAccountId=null;state.libraryJob=null;state.librarySelected.clear();state.libraryCatalogRevision=-1;
     }
+    const previousAccount=state.lastVerifiedWorkspace?.accountId;
+    if(previousAccount&&previousAccount!==scope.accountId){state.selected.clear();state.selectedProjects.clear();state.chats=[];state.projects=[];state.listAccountId=null;state.listLoadedAt=0;state.listSource=null;state.sync=null;state.librarySelected.clear();}
     state.scope = scope;
+    chrome.runtime.sendMessage({type:'CAE_UI_BIND',tabId:tab.id,accountId:scope.accountId,display:scope.display,observed:scope.observed}).catch(()=>{});
     if(state.mode==='library')renderLibrary();
     rememberVerifiedWorkspace(scope,tab);
     // A workspace can have its own already-authorized Vault binding. It wins
     // over the globally last-chosen folder when returning to that workspace.
     try {
       const bound = await ChatArchiveVault.restoreWorkspaceDirectory(scope.accountId);
-      if (bound) state.directory = bound;
+      state.directory=bound||null;
       await refreshVaultStatus();
     } catch (error) { log('WARNING: Workspace Vault status: ' + error.message); }
     $('scope').textContent = `${scope.display} · ${scope.accountId ? scope.accountId.slice(0, 8) : 'account not identified'}`;
     refreshButtons();
     if(manualJob?.active)showManual(manualJob);else status('Connected.');
     await refreshSync().catch(error => log('WARNING: Background status unavailable: ' + error.message));
-    if (state.mode === 'all'&&!manualJob?.active) ensureListLoaded().catch(error => log('WARNING: Could not load conversations: ' + error.message));
-    if (state.mode === 'library') refreshLibraryState(true).catch(error => log('WARNING: Could not read saved Library state: ' + error.message));
+    if (SURFACE==='panel'&&uiView==='export'&&state.mode === 'all'&&!manualJob?.active) ensureListLoaded().catch(error => log('WARNING: Could not load conversations: ' + error.message));
+    refreshLibraryState(true).catch(error => log('WARNING: Could not read saved Library state: ' + error.message));
     if (!scope.observed) log('WARNING: Active workspace ID was not confirmed by the session API. Do not bulk export until the workspace is verified.');
     return scope;
   }
@@ -239,193 +345,168 @@
     state.connecting = p;
     return p;
   }
-  function scheduleReconnect(delay = 250) {
+  function scheduleReconnect(delay = 250,force = false) {
+    state.reverifyScope=!!state.reverifyScope||force;
     if (state.busy && !manualJob?.active) return;
     clearTimeout(state.reconnectTimer);
     state.reconnectTimer = setTimeout(() => {
       state.reconnectTimer = null;
-      reconnect({auto:true}).catch(() => {});
+      const reverify=state.reverifyScope;state.reverifyScope=false;
+      reconnect({auto:true,force:reverify}).catch(() => {});
     }, delay);
   }
-  function filteredChats() {
-    const query = $('search').value.toLocaleLowerCase().trim();
-    if (!query) return state.chats;
-    return state.chats.filter(c => `${c.title} ${c.project || ''} ${c.gptName || ''}`.toLocaleLowerCase().includes(query));
+
+  function chatKind(c){return ChatArchivePaths.isProject(c.projectId)?'project':ChatArchivePaths.isGPT(c.gptId||c.projectId)?'gpt':'unassigned';}
+  function filteredChats(){
+    const query=$('search').value.toLocaleLowerCase().trim(),container=$('chatContainer').value,archived=$('chatArchived').value;
+    return state.chats.filter(c=>(container==='all'||chatKind(c)===container)&&(archived==='all'||!!c.archived===(archived==='archived'))&&
+      (!query||`${c.title} ${c.project||''} ${c.gptName||''}`.toLocaleLowerCase().includes(query)));
   }
-  function refreshSelectionUi() {
-    const visible = filteredChats();
-    const selectedVisible = visible.filter(c => state.selected.has(c.id)).length;
-    $('selectAll').checked = visible.length > 0 && selectedVisible === visible.length;
-    $('selectAll').indeterminate = selectedVisible > 0 && selectedVisible < visible.length;
-    $('selectAll').disabled = !visible.length;
+  function refreshSelectionUi(){
+    const ids=filteredChats().map(c=>c.id),v=U.selection(ids,state.selected);
+    $('selectAll').checked=v.checked;$('selectAll').indeterminate=v.mixed;$('selectAll').disabled=!ids.length;
     refreshButtons();
   }
-  function renderChats() {
-    const container = $('groupList');
-    container.replaceChildren();
-    const visible = filteredChats();
-    const groups = new Map();
-    for (const chat of visible) {
-      const legacyGPT=ChatArchivePaths.isGPT(chat.projectId)?chat.projectId:'';
-      const gid=ChatArchivePaths.gptId(chat.gptId||legacyGPT);
-      const pid=ChatArchivePaths.isProject(chat.projectId)?ChatArchivePaths.canonical(chat.projectId):'';
-      const key=pid?'project:'+pid:gid?'gpt:'+gid:'__unassigned';
-      if (!groups.has(key)) groups.set(key, {name:pid?'Project · '+(chat.project||'Project ['+pid.slice(-8)+']'):
-        gid?'GPT · '+ChatArchivePaths.gptLabel(gid,chat.gptName):'Without project',entries:[]});
-      groups.get(key).entries.push(chat);
+  function renderChats(){
+    const all=new Map(),visibleIds=new Set(filteredChats().map(c=>c.id));
+    for(const c of state.chats){
+      const kind=chatKind(c),id=kind==='project'?ChatArchivePaths.canonical(c.projectId):kind==='gpt'?ChatArchivePaths.gptId(c.gptId||c.projectId):'unassigned';
+      const key=kind+':'+id;
+      if(!all.has(key))all.set(key,{id:key,name:kind==='project'?'Project - '+(c.project||id):kind==='gpt'?'GPT - '+ChatArchivePaths.gptLabel(id,c.gptName):'Without Project',entries:[]});
+      all.get(key).entries.push(c);
     }
-    // Empty Projects are first-class archive objects. GPTs are NOT Projects.
-    for(const project of state.projects){
-      if(!ChatArchivePaths.isProject(project.id))continue;
-      const key='project:'+ChatArchivePaths.canonical(project.id);
-      if(!groups.has(key))groups.set(key,{name:'Project · '+(project.name||'Unnamed project'),entries:[],emptyProjectId:project.id});
+    for(const p of state.projects){
+      const key='project:'+ChatArchivePaths.canonical(p.id);
+      if(!all.has(key)&&ChatArchivePaths.isProject(p.id))all.set(key,{id:key,name:'Project - '+p.name,entries:[],emptyProjectId:p.id});
     }
-    // Newest active group first, empty Projects last.
-    const order = [...groups.entries()].sort(ChatArchiveSort.compareGroups);
-    if (!visible.length && !groups.size) {
-      const empty = document.createElement('p');
-      empty.className = 'hint'; empty.style.padding = '10px';
-      empty.textContent = state.chats.length ? 'No matching conversations.' : 'No conversations loaded.';
-      container.append(empty);
+    const selected=new Set([...state.selected,...[...state.selectedProjects].map(id=>'project:'+id)]),groups=[];
+    for(const [key,g] of [...all.entries()].sort((a,b)=>ChatArchiveSort.compareGroups(a,b))){
+      const visible=g.entries.filter(c=>visibleIds.has(c.id)).sort(ChatArchiveSort.compareChats);
+      if(g.entries.length&&!visible.length)continue;
+      if(g.emptyProjectId&&(($('chatContainer').value!=='all'&&$('chatContainer').value!=='project')||($('search').value&&!g.name.toLowerCase().includes($('search').value.toLowerCase()))))continue;
+      groups.push({id:key,name:g.name,selectableIds:g.emptyProjectId?['project:'+g.emptyProjectId]:g.entries.map(c=>c.id),
+        hint:g.emptyProjectId?'No conversations. Selection exports this Project configuration and Sources.':null,
+        countText:visible.length===g.entries.length?String(visible.length):`${visible.length}/${g.entries.length}`,
+        items:visible.map(c=>({id:c.id,title:c.title,note:c.updated?'Updated '+new Date(typeof c.updated==='number'?c.updated*1000:c.updated).toLocaleDateString():'',badge:c.archived?'archived':''}))});
     }
-    for (const [key, group] of order) {
-      group.entries.sort(ChatArchiveSort.compareChats);
-      const wrapper = document.createElement('div'); wrapper.className = 'group';
-      const header = document.createElement('div'); header.className = 'group-head';
-      const toggle = document.createElement('button'); toggle.className = 'group-toggle';
-      toggle.textContent = state.collapsed.has(key) ? '▸' : '▾'; toggle.title = 'Expand or collapse';
-      const groupBox = document.createElement('input'); groupBox.type = 'checkbox';
-      groupBox.title = 'Select all chats in this group';
-      const selectedCount = group.entries.filter(item => state.selected.has(item.id)).length;
-      groupBox.checked = group.emptyProjectId ? state.selectedProjects.has(group.emptyProjectId) : selectedCount === group.entries.length;
-      groupBox.indeterminate = !group.emptyProjectId && selectedCount > 0 && selectedCount < group.entries.length;
-      groupBox.addEventListener('change', () => {
-        if(group.emptyProjectId){groupBox.checked ? state.selectedProjects.add(group.emptyProjectId) : state.selectedProjects.delete(group.emptyProjectId);}
-        else for (const entry of group.entries) groupBox.checked ? state.selected.add(entry.id) : state.selected.delete(entry.id);
-        renderChats();
-      });
-      const name = document.createElement('span'); name.className = 'group-name'; name.textContent = `▣ ${group.name}`;
-      const count = document.createElement('span'); count.className = 'group-count'; count.textContent = String(group.entries.length);
-      header.append(toggle, groupBox, name, count); wrapper.append(header);
-      const body = document.createElement('div');
-      body.classList.toggle('hidden', state.collapsed.has(key));
-      if(group.emptyProjectId){const hint=document.createElement('p');hint.className='hint';
-        hint.textContent='No conversations. Select the Project to export its configuration and Sources.';
-        body.append(hint);}
-
-      toggle.addEventListener('click', () => { state.collapsed.has(key) ? state.collapsed.delete(key) : state.collapsed.add(key); renderChats(); });
-      for (const entry of group.entries) {
-        const row = document.createElement('label'); row.className = 'chat-row';
-        const box = document.createElement('input'); box.type = 'checkbox'; box.checked = state.selected.has(entry.id);
-        box.addEventListener('change', () => { box.checked ? state.selected.add(entry.id) : state.selected.delete(entry.id); renderChats(); });
-        const title = document.createElement('span'); title.className = 'chat-text'; title.textContent = entry.title;
-        row.append(box, title);
-        if (entry.archived) {
-          const archive = document.createElement('span'); archive.className = 'archived'; archive.textContent = 'archived'; row.append(archive);
-        }
-        body.append(row);
-      }
-      wrapper.append(body); container.append(wrapper);
-    }
+    CAEUITree.render($('groupList'),{groups,selected,collapsed:state.collapsed,onToggle:id=>{state.collapsed.has(id)?state.collapsed.delete(id):state.collapsed.add(id);renderChats();},
+      onSelect:(ids,on)=>{for(const id of ids){if(id.startsWith('project:')){on?state.selectedProjects.add(id.slice(8)):state.selectedProjects.delete(id.slice(8));}else{on?state.selected.add(id):state.selected.delete(id);}}renderChats();}});
     refreshSelectionUi();
   }
-  async function loadList() {
-    markBusy(true);
-    try {
-      if (!state.scope) await reconnect({auto:true});
-      if (!state.scope) throw new Error('Open an active ChatGPT tab to load conversations.');
-      status('Loading conversations…');
-      const data = await call('CAE_LIST', {}, p => status(p.detail));
-      state.scope = data.scope;
-      state.warnings = data.warnings || [];
-      state.chats = data.items;
-      state.projects = data.projects || [];
-      state.listAccountId = data.scope.accountId;
-      state.listLoadedAt = Date.now();
-      state.selected.clear();state.selectedProjects.clear();
-      state.collapsed.clear();
-      $('scope').textContent = `${data.scope.display} · ${data.scope.accountId?.slice(0, 8) || 'unknown account'}`;
-      $('listSummary').textContent = `${data.items.length} chats in ${data.projects.length} projects. ${data.warnings.length ? `Warnings: ${data.warnings.length}` : ''}`;
-      for (const warning of data.warnings) log('WARNING: ' + warning);
-      renderChats();
-      status(`Loaded ${data.items.length} conversations.`);
-    } catch (error) { fail(error); }
-    finally { markBusy(!!manualJob?.active);if(manualJob?.active)showManual(manualJob); }
+  function showCachedChatList(data,account,source){
+    if(!data?.items?.length||state.scope?.accountId!==account||state.listLoadedAt>0)return false;
+    // Selection is by stable chat ID, never by title; preserve existing choices.
+    state.chats=data.items;state.projects=data.projects||[];state.listAccountId=account;
+    state.listSource=source||'saved';state.selected=new Set([...state.selected].filter(id=>data.items.some(c=>c.id===id)));
+    $('listSummary').textContent=`${data.items.length} saved chats (${state.listSource}); checking ChatGPT for updates…`;
+    renderChats();return true;
   }
-  function ensureListLoaded(force = false) {
-    if(manualJob?.active)return Promise.resolve();
-    if (state.listLoading) return state.listLoading;
-    if (!force && state.scope?.accountId && state.listAccountId === state.scope.accountId &&
-        Date.now() - state.listLoadedAt < LIST_MAX_AGE_MS) return Promise.resolve();
-    const p = loadList().finally(() => { if (state.listLoading === p) state.listLoading = null; });
-    state.listLoading = p;
-    return p;
-  }
-  function renderLibrary() {
-    const target=$('libraryGroups');target.replaceChildren();
-    const catalog=state.libraryAccountId===libraryAccount()?state.library:null;
-    if(!catalog){
-      $('librarySummary').textContent='No saved inventory for this workspace. Choose a Vault, then Start inventory.';
-      $('libraryCount').textContent='No inventory loaded.';
-      $('libraryWarnings').classList.add('hidden');refreshButtons();return;
-    }
-    const summary=catalog.summary||{};
-    const parts=[`${summary.total||0} distinct files`,`Library: ${summary.library_files||0}`,`Images: ${summary.images_gallery||0}`,
-      `not in Library: ${summary.image_only||0}`,`Project Sources: ${summary.by_context?.project_source||0}`,
-      `folders: ${summary.folders||0}`,`listing: ${catalog.status||'unknown'}`,
-      `descriptors: ${catalog.classification_status||'unknown'}`,`origins classified: ${summary.classified??0}/${summary.total||0}`,`Sources excluded: ${summary.project_source_excluded||0}`];
-    $('librarySummary').textContent=parts.join(' · ')+'.';
-    const needle=$('librarySearch').value.trim().toLocaleLowerCase();
-    const context=$('libraryContextFilter').value;
-    const filtered=(catalog.items||[]).filter(x=>{
-      if(context!=='all' && !(x.contexts||[]).includes(context))return false;
-      return !needle || [x.name,x.mime_type,x.format_class,...(x.library_locations||[]).map(y=>y.folder_path),
-        ...(x.placements||[]).flatMap(p=>[p.project_name,p.type,p.conversation_id])]
-        .filter(Boolean).join(' ').toLocaleLowerCase().includes(needle);
-    });
-    const groupDefs=[['uploaded','image','Uploaded · Images'],['uploaded','file','Uploaded · Other files'],
-      ['generated','image','Generated · Images'],['generated','file','Generated · Other files'],
-      ['unknown','image','Unknown origin · Images'],['unknown','file','Unknown origin · Other files']];
-    for(const [origin,media,title] of groupDefs){
-      const files=filtered.filter(x=>x.origin===origin&&x.media_class===media);
-      if(!files.length)continue;
-      const section=document.createElement('section');section.className='group';
-      const head=document.createElement('div');head.className='group-head';
-      const label=document.createElement('span');label.className='group-name';label.textContent=title;
-      const count=document.createElement('span');count.className='group-count';count.textContent=String(files.length);
-      head.append(label,count);section.append(head);
-      for(const f of files){
-        const row=document.createElement('div');row.className='library-row';
-        const eligible=f.archive_eligibility?.selectable&&!f.managed_by_project_sources;
-        if(eligible){
-          const box=document.createElement('input');box.type='checkbox';box.className='library-file-checkbox';
-          box.dataset.fileId=f.id;box.dataset.archived=String(['saved','already_archived'].includes(f.archive?.status));box.setAttribute('aria-label','Archive '+(f.name||f.id));box.title=f.archive_eligibility.reason;
-          box.checked=state.librarySelected.has(f.id);
-          box.disabled=!!state.libraryJob?.job?.active||['saved','already_archived'].includes(f.archive?.status);
-          box.addEventListener('change',()=>{box.checked?state.librarySelected.add(f.id):state.librarySelected.delete(f.id);refreshLibraryControls();});
-          row.append(box);
-        }
-        const titleSpan=document.createElement('span');titleSpan.className='chat-text';titleSpan.textContent=f.name || f.id;
-        const note=document.createElement('span');note.className='library-note';
-        note.textContent=[f.format_class,f.origin_status!=='confirmed'?f.origin_status:null,
-          f.managed_by_project_sources?'Excluded: managed by Project Sources':null,
-          f.archive?`Archive: ${f.archive.status}${f.archive.http_status?' (HTTP '+f.archive.http_status+')':''}`:null,
-          ...(f.placements||[]).filter(p=>p.type==='project_source').map(p=>`Project Source: ${p.project_name}`),
-          f.library_locations?.[0]?.folder_path ? `Library: ${f.library_locations[0].folder_path}` : null,
-          f.contexts?.includes('conversation_message') ? 'Conversation reference (role unknown)' : null,
-          f.sources?.includes('library')&&f.sources?.includes('images')?'Library + Images':null].filter(Boolean).join(' · ');
-        row.append(titleSpan,note);section.append(row);
+  async function hydrateCachedChats(account){
+    const C=globalThis.CAEUIChatListCache;
+    if(!C||!account||state.scope?.accountId!==account||state.listLoadedAt>0)return;
+    try{
+      const key=C.key(account),saved=C.accept((await chrome.storage.local.get(key))[key],account);
+      if(saved?.items?.length)showCachedChatList(saved,account,saved.source==='live_api'?'last ChatGPT list':saved.source);
+    }catch(e){log('WARNING: Last chat-list cache unavailable: '+e.message);}
+    // The Vault index/mirror is read-only. It is useful on the very first
+    // panel opening, before any UI list cache exists for this workspace.
+    if(state.listAccountId===account&&state.chats.length)return;
+    try{
+      const v=await syncCommand('CAE_UI_CHAT_CACHE',{accountId:account,display:state.scope?.display||''});
+      if(v?.items?.length&&showCachedChatList(v,account,v.source||'Vault')){
+        const value=C.envelope(account,v.source,v.items,v.projects);
+        chrome.storage.local.set({[C.key(account)]:value}).catch(()=>{});
       }
-      target.append(section);
-    }
-    if(!filtered.length){const p=document.createElement('p');p.className='hint';p.style.padding='8px';p.textContent='No matching files.';target.append(p);}
-    $('libraryCount').textContent=`Showing ${filtered.length} of ${catalog.items.length} distinct files`;
-    const warnings=catalog.warnings||[];
-    $('libraryWarnings').textContent=warnings.join('\n');
-    $('libraryWarnings').classList.toggle('hidden',!warnings.length);
-    refreshButtons();
+    }catch(e){log('WARNING: Vault chat index unavailable: '+e.message);}
+  }
+  async function loadList() {
+    // Refresh is independent of export jobs: the saved list stays interactive
+    // while metadata is loaded in the background.
+    const account=state.scope?.accountId;
+    if(!account){status('Open an authenticated ChatGPT tab to load conversations.');return;}
+    $('loadAll').disabled=true;
+    try {
+      status(state.chats.length?'Refreshing conversations; saved list remains available…':'Loading conversations…');
+      const listPort=state.port,listScope=account;
+      const data=await call('CAE_LIST',{},p=>status(p.detail));
+      if(state.port!==listPort||state.scope?.accountId!==listScope||data.scope?.accountId!==listScope)
+        throw Error('Workspace changed. Discarded the old chat list.');
+      state.scope=data.scope;state.warnings=data.warnings||[];
+      state.chats=data.items||[];state.projects=data.projects||[];
+      state.listAccountId=listScope;state.listLoadedAt=Date.now();state.listSource='live_api';
+      const current=new Set(state.chats.map(c=>c.id));
+      state.selected=new Set([...state.selected].filter(id=>current.has(id)));
+      const projects=new Set(state.projects.map(p=>p.id));
+      state.selectedProjects=new Set([...state.selectedProjects].filter(id=>projects.has(id)));
+      $('scope').textContent=`${data.scope.display} · ${String(listScope).slice(0,8)}`;
+      $('listSummary').textContent=`${state.chats.length} current chats in ${state.projects.length} projects. ${state.warnings.length?'Warnings: '+state.warnings.length:''}`;
+      for(const w of state.warnings)log('WARNING: '+w);
+      renderChats();status(`Updated list: ${state.chats.length} conversations.`);
+      // This UI-only metadata cache never writes to Vault and cannot change
+      // Chat Archive Exporter indexes or the underlying export semantics.
+      const C=globalThis.CAEUIChatListCache;
+      if(C){const cached=C.envelope(listScope,'live_api',state.chats,state.projects);
+        chrome.storage.local.set({[C.key(listScope)]:cached}).catch(e=>log('WARNING: Could not cache chat list: '+e.message));}
+    }catch(error){
+      if(state.scope?.accountId!==account)return;
+      if(state.chats.length){
+        status('Showing saved chat list. Could not update from ChatGPT: '+error.message);
+        $('listSummary').textContent=`${state.chats.length} saved chats · update unavailable`;
+        log('WARNING: Live chat-list refresh failed; cached rows preserved: '+error.message);
+      }else fail(error);
+    }finally{$('loadAll').disabled=false;refreshButtons();}
+  }
+  function ensureListLoaded(force=false){
+    // Do not gate metadata listing on manualJob.active: download_failed and
+    // delivery_uncertain intentionally keep active=true while waiting for the
+    // user's Retry/Stop decision. Blocking here prevents BOTH the saved Vault
+    // preview and the live ChatGPT list in an otherwise healthy workspace.
+    // The original export job remains untouched and still prevents a second
+    // manual export from being submitted until the user resolves it.
+    if(!state.scope?.observed||!state.scope.accountId)return Promise.resolve();
+    const account=state.scope.accountId;
+    if(state.listLoading&&state.listLoadAccount===account)return state.listLoading;
+    if(!force&&state.listAccountId===account&&state.listLoadedAt&&Date.now()-state.listLoadedAt<LIST_MAX_AGE_MS)
+      return Promise.resolve();
+    // Start both at once: the cache renders as soon as available, rather
+    // than waiting for all pages of the provider's listing API.
+    const task=Promise.allSettled([hydrateCachedChats(account),loadList()]);
+    const pending=task.finally(()=>{if(state.listLoading===pending){state.listLoading=null;state.listLoadAccount=null;}});
+    state.listLoading=pending;state.listLoadAccount=account;return pending;
   }
 
+  function libraryEligible(f){return !!f.archive_eligibility?.selectable&&!f.managed_by_project_sources&&!['saved','already_archived'].includes(f.archive?.status);}
+  function renderLibrary(){
+    const catalog=state.libraryAccountId===libraryAccount()?state.library:null;
+    if(!catalog){$('libraryGroups').replaceChildren();$('librarySummary').textContent='No saved inventory for this workspace.';$('libraryCount').textContent='No inventory loaded.';libraryVisible=[];refreshButtons();return;}
+    const summary=catalog.summary||{};
+    $('librarySummary').textContent=`${summary.total||0} files - ${catalog.status||'unknown'} - ${summary.project_source_excluded||0} Project Sources excluded`;
+    const needle=$('librarySearch').value.toLowerCase().trim(),context=$('libraryContextFilter').value,origin=$('libraryOrigin').value,media=$('libraryMedia').value,arch=$('libraryArchiveFilter').value;
+    const filtered=(catalog.items||[]).filter(f=>{
+      const saved=['saved','already_archived'].includes(f.archive?.status);
+      if(context!=='all'&&!(f.contexts||[]).includes(context)||origin!=='all'&&f.origin!==origin||media!=='all'&&f.media_class!==media)return false;
+      if(arch==='saved'&&!saved||arch==='ready'&&!libraryEligible(f)||arch==='excluded'&&f.archive_eligibility?.selectable||arch==='failed'&&!['failed','download_failed','error'].includes(f.archive?.status))return false;
+      return !needle||[f.name,f.mime_type,f.format_class,...(f.library_locations||[]).map(l=>l.folder_path),...(f.placements||[]).map(p=>p.project_name)].filter(Boolean).join(' ').toLowerCase().includes(needle);
+    });
+    libraryVisible=filtered;
+    const ids=new Set((catalog.items||[]).filter(libraryEligible).map(f=>f.id));
+    for(const id of state.librarySelected)if(!ids.has(id))state.librarySelected.delete(id);
+    const groups=[];
+    for(const [o,label] of [['uploaded','Uploaded'],['generated','Generated'],['unknown','Unknown origin']])for(const [m,mlabel] of [['image','Images'],['file','Other files']]){
+      const all=catalog.items.filter(f=>f.origin===o&&f.media_class===m),files=filtered.filter(f=>f.origin===o&&f.media_class===m);if(!files.length)continue;
+      groups.push({id:o+'/'+m,name:label+' - '+mlabel,selectableIds:all.filter(libraryEligible).map(f=>f.id),countText:files.length===all.length?String(files.length):`${files.length}/${all.length}`,
+        items:files.map(f=>({id:f.id,title:f.name||f.id,selectable:!!f.archive_eligibility?.selectable&&!f.managed_by_project_sources,archived:['saved','already_archived'].includes(f.archive?.status),disabled:!libraryEligible(f),
+          reason:f.managed_by_project_sources?'Project Source: Vault copy not verified; use Project Sources export':f.archive_eligibility?.reason||'Not selectable',badge:f.managed_by_project_sources?'Source':f.archive?.status==='saved'?'Saved':f.archive?.status==='failed'?'Failed':'',
+          note:[f.format_class,f.origin_status==='inferred'?'inferred':f.origin==='unknown'?'origin unknown':null,
+            f.managed_by_project_sources?'Project Source: Library download disabled (Vault copy not verified)':null,...(f.placements||[]).filter(p=>p.type==='project_source').map(p=>p.project_name),
+            f.library_locations?.[0]?.folder_path,f.archive?.http_status?'HTTP '+f.archive.http_status:null].filter(Boolean).join(' - ')}))});
+    }
+    CAEUITree.render($('libraryGroups'),{groups,selected:state.librarySelected,collapsed:libraryCollapsed,disabled:!!state.libraryJob?.job?.active,kind:'library',
+      onToggle:id=>{libraryCollapsed.has(id)?libraryCollapsed.delete(id):libraryCollapsed.add(id);renderLibrary();},
+      onSelect:(ids,on)=>{for(const id of ids)on?state.librarySelected.add(id):state.librarySelected.delete(id);renderLibrary();}});
+    $('libraryCount').textContent=`Showing ${filtered.length} of ${catalog.items.length} files`;
+    $('libraryWarnings').textContent=(catalog.warnings||[]).join('\n');$('libraryWarnings').classList.toggle('hidden',!catalog.warnings?.length);refreshButtons();
+  }
   function libraryAccount(){return state.scope?.accountId||state.lastVerifiedWorkspace?.accountId||null;}
   function refreshLibraryControls(){
     const j=state.libraryJob,active=!!j?.job?.active,verified=state.scope?.observed&&state.scope?.accountId===libraryAccount();
@@ -439,7 +520,10 @@
     $('libraryArchive').disabled=!verified||active||state.librarySubmitting||!j?.baseline_at||!state.librarySelected.size;
     $('librarySelectAll').disabled=active||!state.library;
     for(const box of $('libraryGroups').querySelectorAll('.library-file-checkbox'))box.disabled=active||box.dataset.archived==='true';
-    $('librarySelectedCount').textContent=`${state.librarySelected.size} selected`;
+    const visibleIds=libraryVisible.filter(libraryEligible).map(f=>f.id),sel=U.selection(visibleIds,state.librarySelected);
+    $('librarySelectAll').checked=sel.checked;$('librarySelectAll').indeterminate=sel.mixed;
+    const hiddenCount=[...state.librarySelected].filter(id=>!visibleIds.includes(id)).length;
+    $('librarySelectedCount').textContent=`${state.librarySelected.size} selected`+(hiddenCount?` (${hiddenCount} hidden by filters)`:'');
     const job=j?.job;
     $('libraryJobStatus').textContent=job?`${job.status}: ${job.detail}`:'Idle. Start inventory is the only initial scan trigger.';
   }
@@ -470,18 +554,17 @@
   }
   async function startLibrary(){
     if(state.librarySubmitting)return;
+    const scope=state.scope?{...state.scope}:null,tabId=state.tab?.id,dir=state.directory,monitor=$('libraryMonitorOnStart').checked;
+    state.librarySubmitting=true;refreshButtons();
     try{
-      if(!state.scope?.observed||!state.scope.accountId||!state.tab?.id)throw Error('Connect the active ChatGPT workspace first.');
-      if(!state.directory)throw Error('Choose a Vault first.');
-      // Directly initiated by the click; no permission request from a timer.
-      if(!(await ChatArchiveVault.hasPermission(state.directory,true)))throw Error('Vault write access is required.');
-      const account=state.scope.accountId;
-      state.librarySubmitting=true;refreshButtons();
-      await ChatArchiveLibraryStore.bind(account,state.directory);
-      await ChatArchiveVault.rememberWorkspaceDirectory(account,state.directory);
-      state.libraryJob=await syncCommand('CAE_LIBRARY_JOB_START',{options:{accountId:account,display:state.scope.display,
-        tabId:state.tab.id,monitor:$('libraryMonitorOnStart').checked}});
-      status('Library inventory accepted. You may switch sections or close this panel.');
+      if(!scope?.observed||!scope.accountId||!tabId)throw Error('Connect the active ChatGPT workspace first.');
+      if(!dir)throw Error('Choose a Vault first.');
+      if(!(await ChatArchiveVault.hasPermission(dir,true)))throw Error('Vault write access is required.');
+      if(state.scope?.accountId!==scope.accountId||state.tab?.id!==tabId)throw Error('Workspace changed before inventory acceptance.');
+      await ChatArchiveLibraryStore.bind(scope.accountId,dir);
+      await ChatArchiveVault.rememberWorkspaceDirectory(scope.accountId,dir);
+      state.libraryJob=await syncCommand('CAE_LIBRARY_JOB_START',{options:{accountId:scope.accountId,display:scope.display,tabId,monitor}});
+      status('Library inventory accepted. You may switch sections or close this interface.');
       await refreshLibraryState(true);
     }catch(e){fail(e);}finally{state.librarySubmitting=false;refreshButtons();}
   }
@@ -493,6 +576,7 @@
       state.libraryJob=await syncCommand('CAE_LIBRARY_JOB_ARCHIVE',{options:{accountId:state.scope.accountId,
         tabId:state.tab?.id,ids:[...state.librarySelected]}});
       status('Selected originals queued. Existing archived copies will not be duplicated.');
+      await acceptedExport();
       await refreshLibraryState(true);
     }catch(e){fail(e);}finally{state.librarySubmitting=false;refreshButtons();}
   }
@@ -570,7 +654,7 @@
       $('folderStatus').title=dir.name;
       button.textContent=permission.state==='denied'?'Review Vault access\u2026':'Restore Vault access\u2026';
       const manualNeedsAccess=manualJob?.active&&manualJob.destination==='vault'&&manualJob.accountId===account;
-      button.classList.toggle('hidden',!['prompt','denied'].includes(permission.state)||(!state.sync?.enabled&&!manualNeedsAccess));
+      button.classList.toggle('hidden',permission.state==='granted');
       if(manualNeedsAccess)button.disabled=false;
       notifyPanelPermission(permission.state);
       if(permission.state==='granted'&&state.sync?.enabled){
@@ -579,6 +663,7 @@
       }
     })().finally(()=>{
       if(vaultStatusRun===operation)vaultStatusRun=null;
+      uiRefresh();
       if(dir!==state.directory||account!==state.scope?.accountId)refreshVaultStatus().catch(()=>{});
     });
     vaultStatusRun=operation;return operation;
@@ -589,18 +674,21 @@
     await refreshVaultStatus();
   }
   async function selectFolder() {
-    if (state.sync?.enabled || state.libraryJob?.enabled || state.libraryJob?.job?.active) throw new Error('Pause background updates and Library jobs before changing the Vault.');
+    if (manualJob?.active || state.sync?.enabled || state.libraryJob?.enabled || state.libraryJob?.job?.active) throw new Error('Pause background updates and Library jobs before changing the Vault.');
+    if(SURFACE==='popup'){openOptions('settings');status('Use Choose Vault in the persistent settings tab.');return;}
     if (typeof window.showDirectoryPicker !== 'function')
       throw new Error('Directory picker unavailable. Use Chrome with File System Access support.');
     // Picker must be invoked directly from the click gesture, before other awaits.
     const dir = await window.showDirectoryPicker({ id: 'chat-archive-exporter-vault', mode: 'readwrite' });
     state.directory = dir;
+    if(state.scope?.observed)await ChatArchiveVault.rememberWorkspaceDirectory(state.scope.accountId,dir);
     try { await ChatArchiveVault.rememberDirectory(dir); }
     catch (e) { log('WARNING: This Vault can be used now, but its folder handle could not be remembered: ' + e.message); }
     await refreshVaultStatus();refreshLibraryControls();
     status('Vault selected. Existing files and indexes will be reused.');
   }
   async function grantVaultAccess() {
+    if(!state.scope?.observed)throw Error('Activate the original ChatGPT workspace before reconnecting its Vault.');
     if (!state.directory) throw new Error('Choose a Vault directory first.');
     if (!(await ChatArchiveVault.hasPermission(state.directory, true)))
       throw new Error('Vault write permission was not granted.');
@@ -629,64 +717,67 @@
   }
   function showManual(j) {
     manualJob = j;
-    if (!j) return;
+    if (!j) {uiRefresh();return;}
     if(j.active&&j.destination==='vault'&&j.accountId===state.scope?.accountId)restoreManualBinding(j).then(()=>refreshVaultStatus()).catch(e=>log('Could not restore manual Vault binding: '+e.message));
     const busy = !!j.active;
-    if(busy){
-      // Reopening is a view of the accepted job, not a fresh default form.
-      $('outputFolder').checked=j.destination==='vault';
-      $('outputDownload').checked=j.destination!=='vault';
-      $('folderControls').classList.toggle('hidden',j.destination!=='vault');
-      state.mode=j.mode;
-      applyModeView(j.mode);
-    }
     if (state.busy !== busy && !state.listLoading) markBusy(busy);
     $('progress').classList.remove('hidden');
     const sourcePhase = j.phase === 'sources';
     $('progress').max = Math.max(1, sourcePhase ? j.totalSources : j.totalChats);
     $('progress').value = sourcePhase ? j.sourcesDone : j.chatsDone;
     const word = j.destination === 'vault' ? 'saved' : 'prepared';
-    status(`${j.status} - ${j.workspace} - ${j.message || ''}` +
+    const userCanceled=U.userCanceledDownload(j);
+    const unsaved=j.destination==='download'&&j.status==='completed_not_saved';
+    $('manualSummary').textContent=(`${unsaved?'Prepared, not saved':userCanceled?'Download canceled by user':j.status} - ${j.workspace} - ${unsaved?'Browser Save was canceled. No file saved; temporary data discarded.':userCanceled?'Browser Save was canceled. Prepared data retained; Retry is optional.':j.message || ''}` +
       ` Chats: ${j.counts.saved} ${word}, ${j.counts.skipped} skipped, ${j.counts.failed} failed.` +
       (j.counts.conflict ? ` ${j.counts.conflict} local conflicts preserved.` : '') +
       (j.sources ? ` Sources: ${j.sources.saved} ${word}, ${j.sources.skipped} skipped, ${j.sources.failed} failed.` : ''));
     $('cancel').classList.toggle('hidden', !busy);
     $('cancel').disabled = !!j.cancelRequested;
     $('retryManual').classList.toggle('hidden', !['download_failed','delivery_uncertain','storage_error','error'].includes(j.status));
-    $('manualHint').textContent = busy
-      ? 'Accepted job runs independently. You may close this panel. A live ChatGPT tab in the original workspace is needed for pending downloads from ChatGPT.'
-      : (j.destination === 'download' && j.status.startsWith('completed') ? 'Browser download completed.' : 'No manual job is running.');
+    $('manualHint').textContent = unsaved
+      ? 'Selection processed; no browser file was saved. The job is closed and another export may start. Vault access was not changed.'
+      : userCanceled
+        ? 'You canceled the browser Save dialog. This does not affect Vault access. Use Retry delivery if you want the ZIP, or Stop export to discard the pending job.'
+      : busy
+        ? 'Accepted job runs independently. You may close this panel. A live ChatGPT tab in the original workspace is needed for pending downloads from ChatGPT.'
+        : (j.destination === 'download' && j.status.startsWith('completed') ? 'Browser download completed.' : 'No manual job is running.');
     if (j.logs?.length) {
       $('log').classList.remove('hidden');
       $('log').textContent = j.logs.map(x=>`[${new Date(x.at).toLocaleTimeString()}] ${x.level}: ${x.message}`).join('\n');
       $('log').scrollTop = $('log').scrollHeight;
     }
+    uiRefresh();
   }
   function refreshManual() {
     if (manualRefresh) return manualRefresh;
     const p = syncCommand('CAE_MANUAL_STATUS').then(j => { if (!manualSubmitting) showManual(j); }).finally(()=>{if(manualRefresh===p)manualRefresh=null;});
     manualRefresh=p;return p;
   }
-  async function exportChats(items) {
+  async function exportChats(items,options={}) {
     if (state.busy || manualSubmitting) return;
     if (!items.length&&!state.selectedProjects.size) { status('No conversations or Projects selected.'); return; }
     if (!state.scope?.observed || !state.scope?.accountId) { status('Connect to a verified workspace first.'); return; }
     manualSubmitting=true;markBusy(true);
-    const destination=$('outputFolder').checked?'vault':'download';
+    const destination=options.destination||($('outputFolder').checked?'vault':'download'),exportMode=options.mode||state.mode;
+    const boundScope={...state.scope},boundTab=state.tab?.id,boundDirectory=state.directory;
+    const selectedProjects=exportMode==='all'?[...state.selectedProjects]:[],projectSnapshot=state.projects.map(p=>({...p})),totalChats=state.chats.length;
     const requestId=crypto.randomUUID();
     try {
       // Permission comes from this user action; never from a hidden controller.
       if (destination==='vault') {
-        if (!state.directory) throw new Error('Choose a Vault first.');
-        if (!(await ChatArchiveVault.hasPermission(state.directory,true))) throw new Error('Vault write permission required.');
-        await ChatArchiveManualStore.bind(requestId,state.directory);
+        if (!boundDirectory) throw new Error('Choose a Vault first.');
+        if (!(await ChatArchiveVault.hasPermission(boundDirectory,true))) throw new Error('Vault write permission required.');
+        await ChatArchiveManualStore.bind(requestId,boundDirectory);
       }
+      if(state.scope?.accountId!==boundScope.accountId||state.tab?.id!==boundTab)throw Error('Workspace changed before acceptance. Start again in the intended workspace.');
       const j=await syncCommand('CAE_MANUAL_SUBMIT',{options:{requestId,
-        accountId:state.scope.accountId,display:state.scope.display,tabId:state.tab.id,
-        destination,mode:state.mode,items:items.map(x=>({...x})),projects:state.projects,
-        selectedProjectIds:[...state.selectedProjects],
-        fullWorkspace:state.mode==='all'&&state.chats.length>0&&items.length===state.chats.length}});
+        accountId:boundScope.accountId,display:boundScope.display,tabId:boundTab,
+        destination,mode:exportMode,items:items.map(x=>({...x})),projects:projectSnapshot,
+        selectedProjectIds:selectedProjects,
+        fullWorkspace:exportMode==='all'&&totalChats>0&&items.length===totalChats}});
       showManual(j);
+      if(exportMode!=='configuration')await acceptedExport();
     }catch(e){fail(e);markBusy(false);}
     finally{manualSubmitting=false;refreshManual().catch(()=>{});}
   }
@@ -698,24 +789,26 @@
       throw Error('Activate the confirmed ChatGPT workspace first.');
     if(!state.directory)throw Error('Choose the existing Vault first.');
     manualSubmitting=true;markBusy(true);
+    const scope={...state.scope},tabId=state.tab.id,dir=state.directory;
     const requestId=crypto.randomUUID();
     try{
-      if(!(await ChatArchiveVault.hasPermission(state.directory,true)))
+      if(!(await ChatArchiveVault.hasPermission(dir,true)))
         throw Error('Vault write permission is required.');
-      await ChatArchiveManualStore.bind(requestId,state.directory);
+      await ChatArchiveManualStore.bind(requestId,dir);
+      if(state.scope?.accountId!==scope.accountId||state.tab?.id!==tabId)throw Error('Workspace changed before snapshot acceptance.');
       const j=await syncCommand('CAE_MANUAL_SUBMIT',{options:{requestId,
-        accountId:state.scope.accountId,display:state.scope.display,tabId:state.tab.id,
+        accountId:scope.accountId,display:scope.display,tabId,
         destination:'vault',mode:'configuration',items:[],projects:[],fullWorkspace:true}});
-      showManual(j);
+      showManual(j);status('Workspace snapshot accepted. See Activity for progress.');
     }catch(e){fail(e);markBusy(false);}
     finally{manualSubmitting=false;refreshManual().catch(()=>{});}
   }
 
-  async function currentChat() {
+  async function currentChat(destination='download') {
     if (state.busy || !$('exportCurrent') || $('exportCurrent').disabled) return;
     if (!state.scope?.currentId) { status('Open a ChatGPT conversation first.'); return; }
     const item=state.chats.find(c=>c.id===state.scope.currentId)||{id:state.scope.currentId,title:'Current chat',project:'',projectId:''};
-    await exportChats([item]);
+    await exportChats([item],{mode:'current',destination});
   }
 
   async function syncCommand(type, extra={}) {
@@ -743,7 +836,7 @@
     const editable=canEditSync(state.syncAccountId);
     $('syncApply').textContent=enabled?'Apply changes':'Apply / enable';
     $('syncApply').disabled=state.busy||!editable||!isSyncDirty();
-    $('syncPause').disabled=state.busy||!editable||!enabled;
+    $('syncPause').disabled=!editable||!enabled;
     for(const id of ['syncEnabled','syncScope','syncEnrollment','syncSources'])
       $(id).disabled=state.busy||!editable;
   }
@@ -779,7 +872,7 @@
       : 'Permission checks run for enabled workspaces. No content is stored in the access log.';
     $('syncLog').textContent=(c.logs||[]).map(x=>`[${new Date(x.at).toLocaleTimeString()}] ${x.level}: ${x.message}`).join('\n');
     $('syncLog').classList.toggle('hidden',!(c.logs||[]).length);
-    updateSyncApply();
+    updateSyncApply();uiRefresh();
     refreshVaultStatus().catch(()=>{});
   }
   async function applySync() {
@@ -828,24 +921,33 @@
   });
   window.addEventListener('focus',()=>{refreshVaultStatus().catch(()=>{});scheduleReconnect();});
   chrome.tabs.onActivated?.addListener(()=>{
-    state.nextAutoAttempt=0;state.autoFailures=0;scheduleReconnect();
+    state.nextAutoAttempt=0;state.autoFailures=0;scheduleReconnect(250,true);
   });
   chrome.tabs.onUpdated?.addListener((tabId,change,tab)=>{
     if (tab.active&&(change.url||change.status==='complete')) {
-      state.nextAutoAttempt=0;state.autoFailures=0;scheduleReconnect(350);
+      state.nextAutoAttempt=0;state.autoFailures=0;scheduleReconnect(350,true);
     }
   });
   chrome.windows?.onFocusChanged?.addListener(windowId=>{
     if(windowId!==chrome.windows.WINDOW_ID_NONE) scheduleReconnect(350);
   });
 
-  function setPanelModeFromSession() {
-    chrome.storage.session.get({ caeInitialMode: 'current' }, result => {
-      if (result.caeInitialMode === 'all') mode('all');
-    });
+
+  async function setPanelModeFromSession(){
+    const w=await chrome.windows.getCurrent?.().catch(()=>null);uiWindowId=w?.id??state.tab?.windowId;
+    if(SURFACE!=='panel')return;
+    const key='cae.ui.intent.'+uiWindowId;
+    const result=await chrome.storage.session.get([key,'caeInitialMode']);
+    const i=result[key];
+    if(i)consumeIntent(i);else if(result.caeInitialMode==='all')mode('all');
   }
+  function consumeIntent(intent){
+    if(!intent||uiIntent===intent.nonce)return;uiIntent=intent.nonce;
+    if(intent.mode==='monitor')route('activity');else if(['all','current','library'].includes(intent.mode)){mode(intent.mode);if(intent.mode==='all'&&intent.refresh)ensureListLoaded(true).catch(fail);}
+  }
+
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'session' && changes.caeInitialMode && ['current', 'all'].includes(changes.caeInitialMode.newValue)) {
+    if (SURFACE==='panel' && area === 'session' && changes.caeInitialMode && ['current', 'all'].includes(changes.caeInitialMode.newValue)) {
       mode(changes.caeInitialMode.newValue);
     }
   });
@@ -867,10 +969,8 @@
   $('libraryArchive').addEventListener('click',archiveLibrarySelection);
   $('libraryClear').addEventListener('click',()=>{state.librarySelected.clear();$('librarySelectAll').checked=false;renderLibrary();});
   $('librarySelectAll').addEventListener('change',()=>{
-    for(const box of $('libraryGroups').querySelectorAll('.library-file-checkbox:not(:disabled)')){
-      box.checked=$('librarySelectAll').checked;
-      box.checked?state.librarySelected.add(box.dataset.fileId):state.librarySelected.delete(box.dataset.fileId);
-    }refreshLibraryControls();
+    for(const f of libraryVisible.filter(libraryEligible))$('librarySelectAll').checked?state.librarySelected.add(f.id):state.librarySelected.delete(f.id);
+    renderLibrary();
   });
   let libraryStatusTimer=null;
   chrome.storage.onChanged.addListener((changes,area)=>{
@@ -883,9 +983,9 @@
   $('libraryContextFilter').addEventListener('change', renderLibrary);
   $('pickFolder').addEventListener('click', () => selectFolder().catch(fail));
   $('authorizeVault').addEventListener('click', () => grantVaultAccess().catch(fail));
-  for (const id of ['outputDownload', 'outputFolder']) $(id).addEventListener('change', () => $('folderControls').classList.toggle('hidden', !$('outputFolder').checked));
+  for(const id of ['outputDownload','outputFolder'])$(id).addEventListener('change',refreshButtons);
   $('reconnect').addEventListener('click', () => reconnect({force:true}).catch(fail));
-  $('loadAll').addEventListener('click', () => ensureListLoaded(true));
+  $('loadAll').addEventListener('click',()=>{if(SURFACE!=='panel')openPanel('all',true);else{mode('all');ensureListLoaded(true);}});
   $('exportCurrent').addEventListener('click', () => currentChat());
   $('exportSelected').addEventListener('click', () => exportChats(state.chats.filter(c => state.selected.has(c.id))));
   $('snapshotSettings').addEventListener('click',()=>snapshotSettings().catch(fail));
@@ -907,9 +1007,37 @@
     if(area==='local'&&changes['cae.manual-status.v1'])refreshManual().catch(()=>{});
   });
   refreshManual().catch(e=>log('Manual export controller unavailable: '+e.message));
-  setPanelModeFromSession();
+  setPanelModeFromSession().catch(()=>{});
   restoreFolder().catch(fail);
   updateSyncApply();
   restoreVerifiedWorkspace().catch(error=>log('WARNING: Workspace view was not restored: '+error.message))
     .finally(()=>reconnect({auto:true}).catch(fail));
+
+  for(const [id,view] of [['navExport','export'],['navActivity','activity'],['navSettings','settings'],['openTools','tools'],['openSettings','settings']])$(id).addEventListener('click',()=>route(view));
+  $('toolsBack').addEventListener('click',()=>{
+    if(SURFACE==='options'){
+      chrome.tabs.getCurrent?.().then(t=>t?.id?chrome.tabs.remove(t.id):window.close()).catch(()=>window.close());
+    }else route(previousView);
+  });
+  $('quickVault').addEventListener('click',()=>currentChat('vault'));
+  $('currentSelect').addEventListener('change',refreshButtons);
+  $('openChats').addEventListener('click',()=>openPanel('all'));$('openFiles').addEventListener('click',()=>openPanel('library'));
+  $('openMonitor').addEventListener('click',()=>openPanel('monitor'));$('modeMonitor').addEventListener('click',()=>route('activity'));
+  $('openStableSettings').addEventListener('click',()=>openOptions('settings'));
+  for(const id of ['headerReconnect','toolsReconnectVault'])$(id).addEventListener('click',()=>grantVaultAccess().catch(fail));
+  for(const id of ['themeSelect','autoClosePanel','widgetEnabled','libraryMonitorOnStart'])$(id).addEventListener('change',()=>savePreferences().catch(fail));
+  for(const id of ['chatContainer','chatArchived'])$(id).addEventListener('change',renderChats);
+  for(const id of ['libraryOrigin','libraryMedia','libraryArchiveFilter'])$(id).addEventListener('change',renderLibrary);
+  $('keepPanelOpen').addEventListener('change',uiRefresh);
+  $('refreshStatus').addEventListener('click',()=>Promise.all([refreshManual(),refreshSync(),refreshVaultStatus(),refreshLibraryState(true)]).then(()=>status('Cached job and Vault status refreshed. No inventory scan.')).catch(fail));
+  $('showWidget').addEventListener('click',()=>syncCommand('CAE_UI_TOGGLE_WIDGET',{tabId:state.tab?.id})
+    .then(r=>status(r?.shown?'Widget shown. Click again to hide it.':'Widget hidden.'))
+    .catch(fail));
+  chrome.storage.onChanged.addListener((changes,area)=>{
+    if(area==='local'&&changes[U.KEY]){prefs=U.preferences(changes[U.KEY].newValue);applyPreferences();}
+    if(area==='session'&&SURFACE==='panel'&&changes['cae.ui.intent.'+uiWindowId])consumeIntent(changes['cae.ui.intent.'+uiWindowId].newValue);
+  });
+  chrome.storage.local.get(U.KEY).then(r=>{prefs=U.preferences(r[U.KEY]);applyPreferences();}).catch(()=>{});
+  if(['settings','tools','activity'].includes(location.hash.slice(1))&&SURFACE!=='panel')uiView=location.hash.slice(1);
+  applyModeView(state.mode);
 })();

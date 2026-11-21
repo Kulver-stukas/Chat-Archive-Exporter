@@ -1,0 +1,51 @@
+{
+  "baseline": "v0.1.6.11 rev.1",
+  "archive_core": {
+    "content.js": "788eef39a7e54b52f37a38e6f10a44465bc0781d64b60b5d7c737d85a2d60194",
+    "lib/api.js": "501464b000f5c75f610c66c1f88021d0959ba27d2e1d7a81f308218d4ddb99bd",
+    "lib/config-inventory.js": "71df0c036c5a1c64539d9ed9361403ffca9de220a016489c5cdc4568ccf112b9",
+    "lib/hash.js": "258060e06771519c23f7787e903d19f8ac9cfd6497b90d52d47001f421162dfe",
+    "lib/library-inventory.js": "55c3d63ced18091a82313014f649819aeb3c836c3cb3489757f69a443e8171b0",
+    "lib/library-jobs.js": "c7ffd9d826043eb56b3dbad06011b11812922964cd12eebc890b4679216c99fc",
+    "lib/library-policy.js": "e9ca564c88d79f96094a5138f855e45bc69e93efd20181b8b3f0a555e0b02f19",
+    "lib/library-store.js": "27ffea9dd5f259cbbf9c62bc08cc3cc990ee03cb1484783174c3ee699aae5f26",
+    "lib/library-vault.js": "557977316ccab23b9b82af6c18758f97ceec441cc07d545140cb022a2993361e",
+    "lib/manual-jobs.js": "1f7de65c0584d2bde687d8b625a970dd0c19c994970d985154c61be17cc2b74c",
+    "lib/manual-output.js": "1df6d111ab3536273b1ed02459071462d63c6bd2579222c2d2b09c42c620fe47",
+    "lib/manual-store.js": "261a7699a8dcb7f2a64af41831656820a8a49cc292459e10404158589a5cfd04",
+    "lib/meta.js": "b397b5682fbbafad7f2107f040f92f98f6ad38d593c73d07b2f69e0ad93a1711",
+    "lib/normalize.js": "f63479ebfac3b4a4cedebc60e4b7ccd46e08e4614485a0cbe300182c17233ea2",
+    "lib/paths.js": "47361f0f595761aa7d39b411784efbccba3a0354e625c3568f15b50afa352c2b",
+    "lib/sort.js": "f42e92a728cb3b4fd2b4ab17ef7e8041b2a82512dcd8267a8b62afdc10856d10",
+    "lib/source-transfer.js": "f4be307e9b00d429499940b3d1c294fdd5dcb701a8d8a29292f4d738483e779c",
+    "lib/sources.js": "543652cfb7891b4cebcc060152cec8cd54e5ee52512120681584e6a4ff435316",
+    "lib/sync-policy.js": "ec0969ef991eb05c5e8bea45e3b3e7023a50c12cea5bfe0d4a88e5a4767c4c4b",
+    "lib/sync-rpc.js": "cadec4d9506386f807004954617dd5931a2a881d35fe9ed5a9feb77274f9cfdd",
+    "lib/sync-spool.js": "c81072906e4f7fad506401d854cc9848ab282a05ce7bc6b800398219b428379a",
+    "lib/sync.js": "14b05e8b0db12cc5867defd93b742faa9923887951ad26d7daeadda1536fa566",
+    "lib/tab-bootstrap.js": "4cf85d86980c6cb258ea37f50f1cfcfc4940fec4651d123b35db6eab0ade0923",
+    "lib/vault-context.js": "8f025ed194f218a153e1b81747adb10dfaf1ed36d192f54d6aa498bfc3a8eb1a",
+    "lib/vault-diagnostics.js": "02877be5b300f7611a5ea3a3c62211c73cdf9d95c49f11540663bae22fe79f03",
+    "lib/vault-transfer.js": "4f95802a77a991dea6d7d8949c80c9bc93b2c8b53b3faf235c0091327e5295b2",
+    "lib/vault.js": "21f0a03047c2f28ffbcfeea2afe16209b20810f3c2243fb6ec33f43bbd89a686",
+    "lib/zip.js": "0488607ecf70a30974124646e0eebc5318a9028790c41910539f2f50aacfa8e7",
+    "offscreen.html": "f0cc8c76689b959d397d91ab2324f9df0cf551529c80ea78b3958457752c0e76",
+    "offscreen.js": "b3f67955bb227eb1d12008217b011f662a6e5a93c82a0387a69abfa37728e038",
+    "sync-watch.js": "2cd9e9a566147f2dc7e0f363d44f5aafdec793c801e0e03b721b2ac4a9238953"
+  },
+  "worker_prefix_bytes": 8619,
+  "worker_prefix_sha256": "e48b34413858d7090cb3857b336d5d2e6fe2ab41bd8c4e9b57a93ff44e0fadff",
+  "permissions": [
+    "sidePanel",
+    "tabs",
+    "storage",
+    "alarms",
+    "offscreen",
+    "scripting",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*"
+  ]
+}

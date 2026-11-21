@@ -1,3 +1,44 @@
+## v0.1.7 Beta 1 (2026-11-21)
+
+- Stable UX/UI milestone based on rev.5: Popup-first operations and settings, dedicated Tools screen, selection-only Side Panel, optional compact/expanded monitoring widget and toolbar status badge.
+- Saved Chats inventory is shown immediately when available, refreshed against the verified current Workspace. Library/Images inventory remains explicitly on demand.
+- UI recovery and state fixes from rev.2-4; user-canceled browser Save is a terminal `completed_not_saved` rather than a retryable download error (rev.5 maintenance exception).
+- No changes to Vault schema, authentication scope, archive data migrations or permissions; see Beta release notes for remaining limitations.
+
+## v0.1.7 rev.5 (2026-11-19) - Browser Save cancellation semantics
+
+- User-canceled native browser Save dialogs for one chat (Markdown) or selected chats (ZIP) now finish as `completed_not_saved`, with `deliveryOutcome=user_cancelled_save`. No completed file is claimed, and staging is released.
+- Distinguish this from extension Stop (`cancelled`), successful browser delivery (`completed`), and external interruption (`download_failed`, retained for deliberate retry).
+- Migrate old pending `download_failed` jobs whose latest error is `USER_CANCELED` when the extension worker starts.
+- Manual Vault export and its permission/recovery behavior are unchanged. One explicitly requested narrow maintenance change to `lib/manual-jobs.js` is exempt from the v0.1.6.11 core freeze; all other archive modules remain frozen.
+
+## v0.1.7 rev.4 (2026-11-19)
+
+- UI: allow saved and live Chat lists even when a manual download is retained after the user cancels Save.
+- UI: keep chat-list refresh enabled during retained delivery; no change to job processing or Vault.
+
+## v0.1.7 rev.3 — UX/UI recovery and cached Chats
+- The optional widget now re-verifies its workspace automatically when MV3 worker bindings expire or are lost, and refreshes visible monitor state every 45 seconds without starting scans or exports.
+- Short/long widget uses a more compact layout; each log can scroll independently and the outer widget does not scroll in a standard 720px viewport.
+- Chats shows the last workspace-scoped UI metadata cache immediately, optionally hydrating from existing read-only Vault `.workspace.json` or verified background mirror; the provider chat list refreshes afterward without blocking selection. On failure the saved list stays visible and is marked stale.
+- Selection survives list refresh by chat ID; workspace switches still discard old in-memory rows/selections. No Vault migration, new permissions, or frozen core changes.
+- Project Source rows no longer imply that the original is already archived: the UI explicitly distinguishes Source management from verified Vault contents.
+
+## v0.1.7 rev.2 — UX/UI correction build
+- Native toolbar badges REC / IDLE / WARN; canceled user Save is neutral.
+- Side Panel Settings / Tools are local views; explicit settings tab is reused.
+- Legacy in-page ↓ MD button permanently hidden even with widget disabled.
+- Vault UI distinguishes per-document permission confirmation from background writer access.
+- Short/long monitoring widget, three log views, explicit widget toggle and persistent-setting synchronization.
+- Frozen v0.1.6.11 archive core; no new permissions.
+
+# v0.1.7 rev.1
+
+- Popup-first operational UI with separate settings and service tools.
+- Shared checkbox lists with filters, scope-safe selection and explicit archive acceptance.
+- Optional in-page monitor and floppy status icons.
+- Core freeze verified by SHA-256; no extra host/Chrome permissions or Vault migration.
+
 ## v0.1.6.11 rev.1 - 2026-11-16 (test build)
 
 - Remove implicit full Library rescans on section entry, reconnect, tab activation and cache expiry; explicit Start and durable Stop/pause instead.

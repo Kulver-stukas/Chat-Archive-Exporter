@@ -1,3 +1,13 @@
+# Chat Archive Exporter v0.1.7 Beta 1 (rev.5)
+
+Popup-first Export / Activity / Settings, separate Tools, on-demand selection panel and optional monitoring widget. Archive core remains v0.1.6.11 rev.1. See `release-notes/v0.1.7-beta.1.md`, `RELEASE_NOTES_v0.1.7-rev5.md`, and `TEST_REPORT_v0.1.7-rev5.md` for behavior and verification limits.
+
+The v0.1.7 rev.4 Side Panel shows a saved chat list from a workspace-scoped UI cache or (when readable) from Vault `.workspace.json` / the background mirror, then refreshes through the normal ChatGPT API. The panel does not write chat-list metadata back into Vault; current chat export and Vault writing are unchanged.
+
+The following retained v0.1.6.11 documentation describes the unchanged technical capabilities. Its older panel screenshots/instructions are superseded by the v0.1.7 UI notes.
+
+---
+
 # Chat Archive Exporter v0.1.6.11 rev.1 - Library jobs and selected originals (test build)
 
 ## Manual start, not automatic full rescans
@@ -28,7 +38,7 @@
 
 Extract the install ZIP and replace files in the **same existing unpacked extension directory**; click Reload in `chrome://extensions`. Do not uninstall or clear extension storage. Reopen the panel in the intended workspace. A normal ChatGPT conversation page is sufficient; the website's Library/Space page is not required.
 
-No new Chrome permissions or host permissions. Existing chat export and Project Sources controllers are retained. This remains a test build; its authenticated ChatGPT API paths have not been verified in live production during local build testing. See `TEST_REPORT_v0.1.6.11-rev1.md` for the actual executed tests and blocked checks.
+No new Chrome permissions or host permissions. Existing chat export and Project Sources controllers are retained. This is a test build; it has not been published to GitHub or tested against an authenticated live ChatGPT backend in this environment. See `TEST_REPORT_v0.1.6.11-rev1.md` for the actual executed tests and blocked checks.
 
 ## First test run
 
@@ -289,8 +299,13 @@ ChatGPT domains. Browser policies/security checks can still interrupt a download
 ### Download completion and duplicate safety
 
 Prepared is not the same as downloaded. Staged payloads remain until the browser
-reports `complete`. An interrupted download shows **Retry delivery / step** and
-reuses the already staged bytes, without receiving all chats again.
+reports `complete`. External interruptions retain the prepared bytes, offer **Retry
+delivery / step**, and do not silently start another download. A browser Save
+dialog explicitly dismissed by the user (`USER_CANCELED`) instead produces the
+terminal `completed_not_saved` result: the selection was prepared but **no
+completed download was saved**; staged bytes are discarded and another manual
+operation can start. This is distinct from extension **Stop export**. Vault
+exports and permission recovery do not use this browser-download policy.
 
 The job records its delivery intent and extension-owned Blob URL before calling
 `chrome.downloads.download`. On restart it reconciles that attempt with browser
@@ -379,3 +394,7 @@ The container's managed Chromium blocks real extension/local-origin integration;
 native Windows Chrome/Edge file permissions or the real download manager.**
 The included browser-manual.html harness is for an unrestricted test browser; it
 uses real browser IndexedDB/OPFS but mocked provider/extension APIs.
+
+
+### v0.1.7 rev.2 UX test build
+The default browser action opens a Popup with Export, Activity, Settings and Tools. A Side Panel is used for large selections and may close after job acceptance. It also keeps Settings and Tools inline when opened. An optional in-page widget offers short activity monitoring and expanded logs. The old floating current-chat button is suppressed. The toolbar floppy icon now has a native `REC` / `IDLE` / `WARN` status badge. v0.1.6.11 rev.1 remains the functional archival core.

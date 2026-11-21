@@ -14,26 +14,67 @@ jobs:
     steps:
       - name: Checkout release branch
         uses: actions/checkout@v4
-      - name: Verify version, package and publish
+      - name: Verify tag and source version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#release/}"
+          version="$(node -p 'require("./manifest.json").version')"
+          beta_prefix="v${version}-beta."
+          beta_suffix="${tag#"$beta_prefix"}"
+          if [[ "$tag" != "v$version" && ! ( "$tag" == "$beta_prefix"* && "$beta_suffix" =~ ^[1-9][0-9]*$ ) ]]; then
+            echo "Unexpected tag $tag for manifest version $version" >&2
+            exit 1
+          fi
+          test -f "release-notes/$tag.md"
+      - name: Run Node regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          for test in tests/*.test.js; do
+            node "$test" >/dev/null
+            count=$((count + 1))
+          done
+          echo "Passed $count Node test suites"
+      - name: Package and validate extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#release/}"
+          mkdir -p dist
+          python3 tools/package_extension.py "dist/chat-archive-exporter-$tag.zip"
+          python3 - "dist/chat-archive-exporter-$tag.zip" <<'PYTEST'
+          import json,sys,zipfile
+          with zipfile.ZipFile(sys.argv[1]) as z:
+              names=set(z.namelist())
+              base='chat-archive-exporter/'
+              manifest=json.loads(z.read(base+'manifest.json'))
+              required=['lib/api.js','lib/manual-jobs.js','ui/worker-ui.js','ui/widget.js','ui/tree.js','ui/chat-list-cache.js','icons/cae-base-16.png','icons/cae-base-128.png','panel.js','popup.js']
+              for p in required:
+                  assert base+p in names, p
+              for cs in manifest['content_scripts']:
+                  for p in cs['js']:
+                      assert base+p in names, p
+              assert not any('/tests/' in name for name in names)
+              print('Verified extension package:',len(names),'files')
+          PYTEST
+          git archive --format=zip --prefix=chat-archive-exporter/ -o "dist/chat-archive-exporter-$tag-source.zip" HEAD
+      - name: Publish GitHub Beta pre-release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME#release/}"
-          actual="$(node -p 'require("./manifest.json").version')"
-          test "$tag" = "v$actual"
-          test -f "release-notes/$tag.md"
-          mkdir -p dist/chat-archive-exporter
-          cp -- *.js *.html *.css manifest.json README.md CHANGELOG.md LICENSE dist/chat-archive-exporter/
-          cp -R -- lib dist/chat-archive-exporter/
-          (cd dist && zip -q -r "chat-archive-exporter-$tag.zip" chat-archive-exporter)
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Pre-release $tag already exists; leaving its published files unchanged."
+            echo "Release $tag already exists; no asset mutation performed."
           else
-            gh release create "$tag" "dist/chat-archive-exporter-$tag.zip" \
+            gh release create "$tag" \
+              "dist/chat-archive-exporter-$tag.zip" \
+              "dist/chat-archive-exporter-$tag-source.zip" \
               --target "$GITHUB_SHA" \
-              --title "Chat Archive Exporter $tag (test build)" \
+              --title "Chat Archive Exporter v0.1.7 Beta 1" \
               --notes-file "release-notes/$tag.md" \
               --prerelease
           fi

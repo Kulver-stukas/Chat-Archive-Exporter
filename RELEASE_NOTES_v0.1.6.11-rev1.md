@@ -28,4 +28,4 @@
 
 Extract the install ZIP and replace files in the **same existing unpacked extension directory**; click Reload in `chrome://extensions`. Do not uninstall or clear extension storage. Reopen the panel in the intended workspace. A normal ChatGPT conversation page is sufficient; the website's Library/Space page is not required.
 
-No new Chrome permissions or host permissions. Existing chat export and Project Sources controllers are retained. This remains a test build; its authenticated ChatGPT API paths have not been verified in live production during local build testing. See `TEST_REPORT_v0.1.6.11-rev1.md` for the actual executed tests and blocked checks.
+No new Chrome permissions or host permissions. Existing chat export and Project Sources controllers are retained. This is a test build; it has not been published to GitHub or tested against an authenticated live ChatGPT backend in this environment. See `TEST_REPORT_v0.1.6.11-rev1.md` for the actual executed tests and blocked checks.

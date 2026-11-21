@@ -151,3 +151,6 @@ chrome.runtime.onConnect.addListener(port=>{
     if(account)ChatArchiveSync.probeAccess(account,'panel_disconnect').catch(()=>{});
   });
 });
+
+// v0.1.7: UI-only observer/routing; archive engines remain unchanged.
+importScripts('ui/state.js','ui/chat-list-cache.js','ui/worker-ui.js');
