@@ -11,6 +11,7 @@ const source = fs.readFileSync(path.join(root, 'content.js'), 'utf8');
 assert(!source.includes('MutationObserver'), 'Full DOM observers are not allowed in safe mode');
 
 const nodes = new Map();
+nodes.set('cae-inpage-button',{remove(){nodes.delete('cae-inpage-button');}});
 const interval = [];
 const fetch = function originalFetch() { throw new Error('Startup must not fetch data'); };
 const events = new Map();
@@ -23,16 +24,20 @@ const document = {
   body: {appendChild: el => nodes.set(el.id, el)}
 };
 const window = {addEventListener: (name, cb) => events.set(name, cb), fetch};
-const chrome = {runtime: {id:'mock-extension',onConnect: {addListener: () => {}}}};
+let bridgeListeners=0;
+const chrome = {runtime: {id:'mock-extension',getManifest:()=>({version:'0.1.9'}),onConnect: {addListener: () => {bridgeListeners++;}}}};
 const api = {status: async () => { throw new Error('No API requests permitted before export'); }};
-vm.runInNewContext(source, {window, document, location, chrome, ChatArchiveApi:api, setInterval:cb=>{interval.push(cb)}, clearInterval:()=>{}, setTimeout:()=>{}}, {filename:'content.js'});
-assert(nodes.has('cae-inpage-button'));
+const context=vm.createContext({window, document, location, chrome, ChatArchiveApi:api,
+  __CAE_CONTENT_BOOT_VERSION:'0.1.8',setInterval:cb=>{interval.push(cb)}, clearInterval:()=>{}, setTimeout:()=>{}});
+vm.runInContext(source,context,{filename:'content.js'});
+assert(!nodes.has('cae-inpage-button'),'A new content-script boot retires the legacy page button.');
 assert.strictEqual(window.fetch, fetch);
-assert.equal(interval.length, 1);
-for(let i=0;i<10000;i++) interval[0]();
-assert.equal(nodes.size, 1, 'Only one button after repeated checks');
-location.pathname = '/'; interval[0]();
-assert.equal(nodes.size, 0, 'Button removed outside chat');
-location.pathname = '/g/g-p-project/c/6ada08d0-8d20-83e9-b455-f1d305791006'; interval[0]();
-assert.equal(nodes.size, 1, 'Button present on project chat route');
-console.log('PASS: no automatic fetch, no page-world bridge, no DOM observer, bounded SPA route checks');
+assert.equal(interval.length,0,'Content bridge installs no page-button polling timer.');
+for(const route of ['/','/c/6ada08d0-8d20-83e9-b455-f1d305791006','/g/g-p-project/c/6ada08d0-8d20-83e9-b455-f1d305791006']){
+  location.pathname=route;
+  for(let n=0;n<3;n++)vm.runInContext(source,context,{filename:'content.js'});
+  assert.equal(nodes.size,0,'Reinjection/navigation must not create a page export button.');
+}
+assert.equal(bridgeListeners,1,'Repeated content injection keeps one bridge listener.');
+assert.strictEqual(window.fetch,fetch,'Provider fetch remains uninstrumented.');
+console.log('PASS: no automatic fetch, no page-world bridge, no DOM observer/polling, legacy button retired and bridge boot idempotent');

@@ -74,7 +74,7 @@ jobs:
               "dist/chat-archive-exporter-$tag.zip" \
               "dist/chat-archive-exporter-$tag-source.zip" \
               --target "$GITHUB_SHA" \
-              --title "Chat Archive Exporter v0.1.7 Beta 1" \
+              --title "Chat Archive Exporter $tag" \
               --notes-file "release-notes/$tag.md" \
               --prerelease
           fi

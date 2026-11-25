@@ -25,6 +25,12 @@
  window.chrome={runtime:{id:'mock-extension',getURL:p=>'https://cae.test/'+p,getManifest:()=>({version:'0.1.7'}),onMessage:event(),lastError:null,
   connect:()=>({postMessage(){},onDisconnect:event(),disconnect(){}}),sendMessage:async m=>{
    t.calls.push(structuredClone(m));
+   if(m.type==='CAE_EXPORT_PREFS_GET'||m.type==='CAE_EXPORT_PREFS_PATCH'){
+    const key='cae.export.preferences.v1',defaults={questions:true,answers:true,thinking:true,uploadedFiles:true,generatedFiles:true,completeConversation:true};
+    const value={...defaults,...t.local[key],...(m.type==='CAE_EXPORT_PREFS_PATCH'?m.patch:{}),_revision:(t.local[key]?._revision||0)+(m.type==='CAE_EXPORT_PREFS_PATCH'?1:0)};
+    if(m.type==='CAE_EXPORT_PREFS_PATCH')await chrome.storage.local.set({[key]:value});
+    return {ok:true,result:structuredClone(value)};
+   }
    if(m.type==='CAE_MANUAL_STATUS')return {ok:true,result:structuredClone(t.manual)};
    if(m.type==='CAE_MANUAL_SUBMIT'){
     if(t.reject)return {ok:false,error:'Fixture: job rejected before acceptance'};

@@ -84,7 +84,7 @@ const mockTransport = () => ({
   assert.equal(report.results[0].sha256,SHA);
   assert.deepEqual(await contents(sourcePath),bytes,'exact bytes persisted');
   assert.equal(started,1);
-  const v3=await V.openStore(root);
+  const v3=await V.openStore(root);await v3.useWorkspace(layout.prefix,account);
   report=await T.run([source],{transport:mockTransport(),vault:v3,expectedAccountId:account,pause:async()=>{}});
   assert.equal(report.counts.skipped,1);
   assert.equal(started,1,'second run did not make source requests');

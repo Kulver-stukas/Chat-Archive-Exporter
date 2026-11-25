@@ -10,9 +10,31 @@
 <main>
  <section id="currentSection" class="card" data-view="export">
   <p class="section-label">Current chat</p><p id="currentTitle" class="conversation-title">Detecting active tab...</p>
-  <label class="inline-option panel-only"><input id="currentSelect" type="checkbox" checked>Complete conversation</label>
-  <div class="actions"><button id="exportCurrent" class="primary" disabled>Download MD</button><button id="quickVault" disabled>Save to Vault</button></div>
-  <p class="hint">Whole chat, including available Thinking. Individual blocks cannot be exported separately yet.</p>
+  <label class="inline-option" title="Export the whole conversation with the selected categories. Uncheck to select individual messages."><input id="currentSelect" type="checkbox" checked>Complete conversation</label>
+  <div class="actions current-actions">
+   <div class="export-split">
+    <button id="exportCurrent" class="primary" disabled>Download MD</button><button id="exportMenuToggle" class="primary export-menu-toggle" type="button" aria-label="Choose export content" aria-expanded="false" aria-controls="exportContentMenu" aria-describedby="exportContentSummary" title="Choose export content"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button>
+    <div id="exportContentMenu" class="export-content-menu hidden" role="group" aria-label="Export content">
+     <label><input id="exportAll" type="checkbox" checked>All</label>
+     <label><input id="exportQuestions" data-export-field="questions" type="checkbox" checked>Question</label>
+     <label><input id="exportAnswers" data-export-field="answers" type="checkbox" checked>Answers</label>
+     <label><input id="exportThinking" data-export-field="thinking" type="checkbox" checked>Thinking</label>
+     <hr>
+     <label><input id="exportUploaded" data-export-field="uploadedFiles" type="checkbox" checked>Uploaded files</label>
+     <label><input id="exportGenerated" data-export-field="generatedFiles" type="checkbox" checked>Generated files</label>
+     <p class="hint">Saved for all tabs.</p>
+    </div>
+   </div>
+   <button id="quickVault" disabled title="Save the complete conversation to Vault; download filters do not apply.">Save to Vault</button>
+  </div>
+  <span id="exportContentSummary" class="sr-only">All content · Complete conversation</span>
+  <section id="messageSelector" class="message-selector hidden" aria-label="Select messages">
+   <div class="row"><h2>Select messages</h2><button id="reloadMessages" class="small" type="button" title="Reload the active conversation and its available file references">Refresh</button></div>
+   <p id="messageSelectionStatus" class="hint hidden" role="status"></p>
+   <div class="message-selection-actions" role="group" aria-label="Select messages by role"><button data-message-selection="all" type="button">All</button><button data-message-selection="question" type="button">Questions</button><button data-message-selection="answer" type="button">Answers</button><button data-message-selection="none" type="button">None</button><button data-message-selection="invert" type="button">Invert</button></div>
+   <div id="messageRows" class="message-rows"></div>
+   <div class="message-selection-footer"><span id="messageSelectedCount" class="count" role="status">0 selected</span><button id="downloadMessages" class="primary wide" disabled title="Download selected messages using the chosen content categories. Files require a ZIP; otherwise Markdown.">Download selection</button></div>
+  </section>
  </section>
  <section id="browseSection" class="card popup-only" data-view="export">
   <p class="section-label">Choose from a list</p><div class="quick-links"><button id="openChats">Conversations <span aria-hidden="true">&rarr;</span></button><button id="openFiles">Library / Images <span aria-hidden="true">&rarr;</span></button></div>
@@ -47,12 +69,12 @@
  <section id="vaultSettings" class="card hidden" data-view="settings"><h2>Vault connection</h2><div id="folderControls"><p id="folderStatus" class="hint">No Vault selected.</p><div class="actions"><button id="pickFolder" class="small">Choose Vault...</button><button id="authorizeVault" class="small hidden">Reconnect Vault</button></div></div><p class="hint">Changing the folder does not move existing archives.</p><button id="openStableSettings" class="small wide" style="margin-top:8px">Open settings in a tab</button></section>
  <section id="syncSection" class="card hidden" data-view="settings"><h2>Chat monitoring</h2><label class="inline-option"><input type="checkbox" id="syncEnabled">Enable background update</label><label class="sync-field">Scope<select id="syncScope"><option value="active">Active and finishing conversations</option><option value="workspace">All eligible workspace conversations</option></select></label><label class="sync-field">Enrollment<select id="syncEnrollment"><option value="tracked">Already archived objects only</option><option value="tracked_and_new">Archived + newly created</option></select></label><label class="inline-option"><input type="checkbox" id="syncSources">Check Project Sources every 6 hours</label><p class="hint">First export a chat to Vault. Older unarchived objects are not enrolled automatically.</p><button id="syncApply" class="small wide" style="margin-top:8px" disabled>Apply / enable</button></section>
  <section id="librarySettings" class="card hidden" data-view="settings"><h2>Library monitoring</h2><label class="inline-option"><input id="libraryMonitorOnStart" type="checkbox" checked>After a manual inventory, monitor new file metadata</label><label class="inline-option"><input id="libraryMonitor" type="checkbox" disabled>Monitor new files every five minutes</label><p class="hint">Metadata only. Originals are always selected manually.</p><span id="libraryVaultName" class="hidden"></span><button id="libraryPickVault" class="hidden">Choose Vault</button><button id="libraryGrantVault" class="hidden">Reconnect Vault</button></section>
- <section id="uiSettings" class="card hidden" data-view="settings"><h2>Interface</h2><label class="sync-field">Theme<select id="themeSelect"><option value="auto">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label><label class="inline-option"><input id="autoClosePanel" type="checkbox" checked>Close selection panel after export is accepted</label><label class="inline-option"><input id="widgetEnabled" type="checkbox">Show monitoring widget on ChatGPT pages</label><p class="hint">The widget never starts an inventory. Background jobs do not depend on an open panel.</p><p class="version">v0.1.7 rev.5 &middot; archive core v0.1.6.11</p></section>
+ <section id="uiSettings" class="card hidden" data-view="settings"><h2>Interface</h2><label class="sync-field">Theme<select id="themeSelect"><option value="auto">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label><label class="inline-option"><input id="autoClosePanel" type="checkbox" checked>Close selection panel after export is accepted</label><label class="inline-option"><input id="widgetEnabled" type="checkbox">Show monitoring widget on ChatGPT pages</label><p class="hint">The widget never starts an inventory. Background jobs do not depend on an open panel.</p><p class="version">v0.1.9 rev.1 &middot; selective export</p></section>
  <section id="toolsHeading" class="row hidden" data-view="tools"><h2>Tools / Service</h2><button id="toolsBack" class="small">Back</button></section>
  <section id="toolsConnection" class="card tools-card hidden" data-view="tools"><h2>Workspace &amp; Vault</h2><button id="reconnect">Reconnect ChatGPT tab</button><button id="toolsReconnectVault">Reconnect Vault</button><button id="refreshStatus">Refresh connection status</button><p class="hint">Restoring Vault access and reconnecting a ChatGPT tab are separate actions.</p><button id="snapshotSettings">Snapshot workspace to Vault</button><p class="hint">Saves configuration and available metadata, not Memory or chat bodies.</p></section>
  <section id="toolsInventory" class="card tools-card hidden" data-view="tools"><h2>Inventory</h2><button id="downloadLibraryCatalog" disabled>Download Library catalog JSON</button><p id="catalogStamp" class="hint">Exports the saved current-workspace catalog. Does not scan.</p><button id="loadAll">Refresh chat list in selection panel</button></section>
  <section id="toolsDiagnostics" class="card tools-card hidden" data-view="tools"><h2>Diagnostics</h2><button id="exportAccessDiagnostics">Export access diagnostics</button><p class="hint">Permission timeline only. No chat bodies, tokens or original files.</p></section>
 </main><footer class="footer-status"><span id="overallStatus">Idle</span></footer>
-<script src="lib/normalize.js"></script><script src="lib/hash.js"></script><script src="lib/paths.js"></script><script src="lib/vault.js"></script><script src="lib/sort.js"></script><script src="lib/manual-store.js"></script><script src="lib/library-store.js"></script><script src="ui/state.js"></script><script src="ui/tree.js"></script>
+<script src="lib/export-selection.js"></script><script src="lib/normalize.js"></script><script src="lib/hash.js"></script><script src="lib/paths.js"></script><script src="lib/vault.js"></script><script src="lib/sort.js"></script><script src="lib/manual-store.js"></script><script src="lib/library-store.js"></script><script src="ui/state.js"></script><script src="ui/tree.js"></script>
 <script src="ui/chat-list-cache.js"></script><script src="panel.js"></script>
 </body></html>

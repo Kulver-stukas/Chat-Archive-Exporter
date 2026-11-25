@@ -28,7 +28,7 @@ function createEnvironment(){
  const chat=(n,title='Chat '+n)=>({id:`aaaaaaaa-1111-2222-3333-${String(n).padStart(12,'0')}`,title,
    created:'2026-11-01T12:00:00Z',updated:'2026-11-02T12:00:00Z',projectId:pid,project:'Project test'});
  const env={root,handles,storage,calls,downloads,account,pid,chat,context:null,tabAvailable:true,scopeAccount:account,
-   blobs:new Map(),remote:new Map(),downloadState:'complete',prepareCalls:0,syncState:{workspaces:{},cooldown_until:0}};
+   blobs:new Map(),remote:new Map(),normalizedChats:new Map(),downloadState:'complete',prepareCalls:0,syncState:{workspaces:{},cooldown_until:0}};
  const chrome={storage:{local:{get:async k=>({[k]:structuredClone(storage[k])}),set:async x=>Object.assign(storage,structuredClone(x))}},
   alarms:{get:async n=>alarms.get(n),create:async(n,x)=>alarms.set(n,x),clear:async n=>alarms.delete(n)},
   tabs:{get:async id=>{if(!env.tabAvailable)throw Error('Missing');return {id,url:'https://chatgpt.com/c/'+chat(1).id,active:true,windowId:1};},query:async()=>[]},
@@ -49,7 +49,7 @@ function createEnvironment(){
      indexedDB:fake.indexedDB,IDBKeyRange:fake.IDBKeyRange,navigator:{locks},
      setTimeout:(fn,ms)=>{if(ms>800&&ms<=1400){now+=ms;queueMicrotask(fn);}return 1;},clearTimeout(){}};
    vm.createContext(box);
-   for(const f of ['normalize','hash','paths','meta','sources','vault','vault-transfer','manual-store'])vm.runInContext(fs.readFileSync(path.join(base,'lib/'+f+'.js'),'utf8'),box);
+   for(const f of ['export-selection','export-preferences','normalize','hash','paths','meta','sources','vault','vault-transfer','manual-store','manual-attachments'])vm.runInContext(fs.readFileSync(path.join(base,'lib/'+f+'.js'),'utf8'),box);
    box.ChatArchiveManualStore.bind=async(k,h)=>handles.set(k,h);
    box.ChatArchiveManualStore.directory=async k=>handles.get(k)||null;
    box.ChatArchiveVaultContext={ensure:async()=>true,reconcile:async()=>true};
@@ -60,14 +60,15 @@ function createEnvironment(){
      if(err){const e=err;err=null;throw e;}
      if(env.onCall)await env.onCall(type,o);
      if(type==='CAE_GET_CHAT'){
+       if(env.normalizedChats.has(o.chat.id))return structuredClone(env.normalizedChats.get(o.chat.id));
        const x=env.remote.get(o.chat.id)||o.chat;
        return {id:x.id,title:x.title,created:x.created,updated:x.updated,source:'https://chatgpt.com/c/'+x.id,projectId:x.projectId,projectName:x.project,
          messages:[{role:'user',content:'Prompt',time:x.created,text:'Prompt',blocks:[{type:'text',text:'Prompt'}],created:x.created},
                    {role:'assistant',content:x.body||'Response',time:x.updated,text:x.body||'Response',blocks:[{type:'text',text:x.body||'Response'}],created:x.updated}],warnings:[]};
      }
      if(type==='CAE_CONTEXT')return structuredClone(env.context||{captured_at:'2026-11-12T02:00:00Z',projects:[],projects_complete:true,personalization:null,warnings:[]});
-     if(type==='CAE_SOURCE_START'){
-       source=env.blobs.get(o.fileId);done=false;
+     if(type==='CAE_SOURCE_START'||type==='CAE_ATTACHMENT_START'){
+       source=env.blobs.get(o.fileId||o.attachment?.fileId||o.attachment?.sandboxPath);done=false;
        if(!source)throw Object.assign(Error('Source HTTP 404'),{httpStatus:404,code:'SOURCE_HTTP'});
        return {contentType:'application/octet-stream'};
      }

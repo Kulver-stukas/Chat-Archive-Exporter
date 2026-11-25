@@ -25,7 +25,7 @@ with sync_playwright() as p:
   pg.set_content(html);pg.add_style_tag(content=(root/'styles.css').read_text())
   pg.add_script_tag(content='const iconmap='+json.dumps(iconmap)+';const srcprop=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,\"src\");Object.defineProperty(HTMLImageElement.prototype,\"src\",{get:srcprop.get,set(v){srcprop.set.call(this,iconmap[v]||v)}});if(!crypto.randomUUID)crypto.randomUUID=()=>\"aaaaaaaa-bbbb-cccc-dddd-\"+String(Math.random()).slice(2,14);')
   pg.add_script_tag(content=(root/'tests/ui-fixtures.js').read_text())
-  for f in ['lib/normalize.js','lib/paths.js','lib/sort.js','ui/state.js','ui/tree.js','ui/chat-list-cache.js','panel.js']:pg.add_script_tag(content=(root/f).read_text())
+  for f in ['lib/export-selection.js','lib/normalize.js','lib/paths.js','lib/sort.js','ui/state.js','ui/tree.js','ui/chat-list-cache.js','panel.js']:pg.add_script_tag(content=(root/f).read_text())
   pg.wait_for_function("document.querySelector('#scope').textContent.includes('Test workspace')")
   pg.wait_for_timeout(300);assert not errs,errs
   return pg,errs

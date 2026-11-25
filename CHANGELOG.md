@@ -1,9 +1,41 @@
-## v0.1.7 Beta 1 (2026-11-21)
+## v0.1.9 Beta 1 (2026-11-25)
 
-- Stable UX/UI milestone based on rev.5: Popup-first operations and settings, dedicated Tools screen, selection-only Side Panel, optional compact/expanded monitoring widget and toolbar status badge.
-- Saved Chats inventory is shown immediately when available, refreshed against the verified current Workspace. Library/Images inventory remains explicitly on demand.
-- UI recovery and state fixes from rev.2-4; user-canceled browser Save is a terminal `completed_not_saved` rather than a retryable download error (rev.5 maintenance exception).
-- No changes to Vault schema, authentication scope, archive data migrations or permissions; see Beta release notes for remaining limitations.
+- Publish the verified rev.3 test build with the v0.1.8 technical fixes and v0.1.9 selective export. No additional runtime changes for this pre-release. See `release-notes/v0.1.9-beta.1.md`.
+
+## v0.1.9 rev.3 (2026-11-25) — Image originals and selector polish
+
+- Recover original references from visible active-branch image-generation outputs, including legacy image file IDs; do not export internal tool text. Preserve the legacy full Vault renderer. Recognized images take part in the ZIP selection, with original bytes and explicit download outcomes.
+- Disable the redundant upper action while choosing messages, keep the split menu available, and hide the complete Vault action in that mode. Show the predicted ZIP/MD format when known. Move explanatory paragraphs to tooltips and accessible descriptions.
+- Defer individual attachment checkboxes to the UI/UX backlog. All 71 Node tests and focused Chromium selector checks pass. Live authenticated image download is pending user acceptance testing. No new permissions or Vault format migration.
+
+## v0.1.9 rev.2 (2026-11-25) — Compact message selector
+
+- Keep collapsed question/answer rows on one line with ellipsis. Indent answer checkboxes and disclosure controls by 15 px instead of repeating role labels.
+- Use the actual normalized user/assistant text as the preview regardless of export-category settings. Do not display Thinking as response text; textless responses show file names or an explicit no-text label.
+- Move Thinking availability, eligible file counts and exclusion metadata into expanded details. The expansion retains the full question/response preview and file names.
+- Preserve grouping, selection IDs, category eligibility and all export/Vault/job semantics. No new permissions.
+- All 70 Node regression suites pass. Focused Chromium rendering/interaction checks pass with 200 rows at 320 px (light) and 400 px (dark). The existing multi-surface browser scenario is blocked by navigation policy in this environment; authorized Chrome/Edge UAT remains required.
+
+## v0.1.9 rev.1 (2026-11-25) — Selective conversation export
+
+- Add a Download MD split button in popup and panel, shared content-category preferences, and an independent Complete conversation switch. All categories and the complete conversation are selected by default.
+- Add a side-panel message selector with logical answer grouping, available Thinking, individual checkboxes, bulk All/Questions/Answers/None/Invert, counts and expandable text.
+- Export selected uploaded/generated originals, including file-ID and scoped sandbox references, in a ZIP with Markdown and an explicit per-file report. Plain text-only exports remain .md. Preserve original bytes and safe filenames.
+- Freeze accepted choices in durable jobs; verify snapshot/output/original checksums, recover completed file staging without repeat transfers, preserve cancellation and delivery semantics.
+- Bind selections to workspace/conversation/branch/tab, recheck context before acceptance, preserve upload provenance across assistant references, and reject stale or empty selections.
+- Serialize preference patches with persisted revisions so independent extension pages do not overwrite each other or regress to stale storage events.
+- Remove the legacy page export button. Full Vault/batch/background archival behavior and browser permission scope remain unchanged.
+- Add eight Node suites (70 total passing), a new browser UI suite pending an available browser, updated UAT and an actionable UI/UX TODO. Native authenticated Chrome/Edge UAT has not been executed in this session.
+
+## v0.1.8 rev.1 (2026-11-22) — Project Sources and Vault integrity
+
+- Project Source membership is now contextual evidence, **not** evidence that an original is already in the Vault. A Library original can be selected unless a matching archived Source file is verified by on-disk size and SHA-256. Modified copies produce conflicts without overwrite.
+- Files linked to Project Sources but absent from Library/Images remain **Source-only reference** records, never invented downloadable Library files. Correlate `conversation_id`/`message_id` when supplied; unknown message authors and absent UI URLs remain explicit unknowns.
+- Source filenames blocked by File System Access/Chromium are mapped to deterministic inert on-disk aliases; preserve `original_filename`, `stored_filename`, file ID and SHA-256 in the index. Browser `Name is not allowed` retries once with an alias; repeat failures produce a concrete error, not an infinite task retry.
+- Add a pending Source index receipt and staged hash checkpoint; after interrupted writes, reuse verified bytes only when the complete size and SHA-256 match, without redownloading or overwriting conflicts. Guard source paths by the active workspace.
+- Incremental Library polling now writes newly discovered Project Source placements and Source-only promotions to the Vault even when no new Library file was created; unchanged polling does not rewrite the snapshot.
+- Existing v0.1.7 UX/UI and manual browser Save cancellation behavior are preserved. Chrome permissions and host permissions unchanged. Real Chrome/Edge permission UAT remains required.
+- Selective per-Prompt/Thinking/Response export moved to P2, no implementation in this revision.
 
 ## v0.1.7 rev.5 (2026-11-19) - Browser Save cancellation semantics
 

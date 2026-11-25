@@ -42,7 +42,7 @@ const source = f => fs.readFileSync(path.join(base, f), 'utf8');
       onConnect: {addListener(fn) { contentConnect = fn; }}
     }},
     window: {addEventListener() {}},
-    document: {readyState: 'loading', addEventListener() {}, visibilityState: 'hidden'},
+    document: {readyState: 'loading', addEventListener() {}, getElementById(){return null;}, visibilityState: 'hidden'},
     location: {pathname: '/'},
     setTimeout, clearTimeout, setInterval() {},
     AbortController, console

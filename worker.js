@@ -1,8 +1,17 @@
-importScripts('lib/normalize.js','lib/config-inventory.js','lib/hash.js','lib/paths.js','lib/meta.js','lib/sources.js',
-  'lib/vault.js','lib/vault-transfer.js','lib/sync-policy.js','lib/sync-spool.js','lib/sync-rpc.js','lib/vault-context.js','lib/vault-diagnostics.js','lib/sync.js','lib/tab-bootstrap.js','lib/manual-store.js','lib/manual-jobs.js',
+importScripts('lib/export-selection.js','lib/export-preferences.js','lib/normalize.js','lib/config-inventory.js','lib/hash.js','lib/paths.js','lib/meta.js','lib/sources.js',
+  'lib/vault.js','lib/vault-transfer.js','lib/sync-policy.js','lib/sync-spool.js','lib/sync-rpc.js','lib/vault-context.js','lib/vault-diagnostics.js','lib/sync.js','lib/tab-bootstrap.js','lib/manual-store.js','lib/manual-attachments.js','lib/manual-jobs.js',
   'lib/library-inventory.js','lib/library-policy.js','lib/library-store.js','lib/library-vault.js','lib/library-jobs.js');
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if(message?.type?.startsWith('CAE_EXPORT_PREFS_')){
+    if(sender.id!==chrome.runtime.id||sender.tab||message.target)return false;
+    const prefs=globalThis.ChatArchiveExportPreferences;
+    const run=message.type==='CAE_EXPORT_PREFS_GET'?()=>prefs.get():
+      message.type==='CAE_EXPORT_PREFS_PATCH'?()=>prefs.patch(message.patch):null;
+    if(!run)return false;
+    Promise.resolve().then(run).then(result=>sendResponse({ok:true,result}),
+      e=>sendResponse({ok:false,error:String(e?.message||e)}));return true;
+  }
   if (message?.type?.startsWith('CAE_LIBRARY_JOB_')) {
     if(sender.id !== chrome.runtime.id || sender.tab || message.target)return false;
     const L=globalThis.ChatArchiveLibraryJobs;

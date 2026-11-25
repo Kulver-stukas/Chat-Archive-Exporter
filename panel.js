@@ -2,7 +2,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const state = {
-    port: null, tab: null, scope: null, mode: 'current', directory: null,
+    port: null, tab: null, scope: null, mode: 'current', directory: null, currentContextPending:false,
     chats: [], projects: [], selected: new Set(), selectedProjects:new Set(), collapsed: new Set(), requests: new Map(), nextId: 1,
     busy: false, cancel: false, warnings: [], sync: null, syncLoaded: false, syncAccountId: null,
     lastVerifiedWorkspace: null,
@@ -15,6 +15,13 @@
 
   const SURFACE=document.body.dataset.surface||'panel';
   const U=globalThis.CAEUIState;
+  const E=globalThis.ChatArchiveExportSelection;
+  const EXPORT_PREFS_KEY='cae.export.preferences.v1';
+  const EXPORT_FIELDS=['questions','answers','thinking','uploadedFiles','generatedFiles'];
+  const exportDefaults={questions:true,answers:true,thinking:true,uploadedFiles:true,generatedFiles:true,completeConversation:true};
+  const cleanExportPrefs=raw=>E?.preferences?E.preferences(raw):Object.fromEntries(Object.keys(exportDefaults).map(k=>[k,raw?.[k]!==false]));
+  let exportPrefs=cleanExportPrefs(),exportPrefsReady=false,exportPrefsPending=0,exportPrefsPromise=null,exportStoredRevision=-1;
+  let messageSelection=null,messageSelectorOpen=false,messageSelectionLoading=false,messageLoadGeneration=0,messageLoadBinding=null;
   let uiView=SURFACE==='options'?'settings':'export',prefs=U.preferences(),previousView='export';
   let uiWindowId=null,libraryCollapsed=new Set(),libraryVisible=[],uiIntent=null;
   const sourceTabId=Number(new URLSearchParams(location.search).get('tab'))||null;
@@ -40,11 +47,11 @@
       }else await chrome.tabs.create({url});
     }catch(error){fail(error);}
   }
-  function openPanel(name,refresh=false){
+  function openPanel(name,refresh=false,extra={}){
     const windowId=state.tab?.windowId??uiWindowId;
     if(!Number.isInteger(windowId)){status('Activate a browser window and reopen the popup.');return;}
     // Call open in this click handler, before awaits: preserve the user gesture.
-    const intent={mode:name,refresh,at:Date.now(),nonce:crypto.randomUUID()};
+    const intent={mode:name,refresh,...extra,at:Date.now(),nonce:crypto.randomUUID()};
     const saved=chrome.storage.session.set({['cae.ui.intent.'+windowId]:intent});
     const opened=chrome.sidePanel.open({windowId});
     Promise.all([saved,opened]).then(()=>{if(SURFACE==='popup')window.close();}).catch(fail);
@@ -73,7 +80,7 @@
     $('vaultBadge').textContent=state.directory?`Vault: ${state.directory.name} - ${permission[state.vaultPermission]||'checking access'}`:'Vault not selected';
     $('headerReconnect').classList.toggle('hidden',!state.directory||state.vaultPermission==='granted');
     $('headerReconnect').disabled=false;
-    $('quickVault').disabled=state.busy||!state.port||!state.scope?.observed||!state.scope.currentId||!state.directory||!$('currentSelect').checked;
+    $('quickVault').disabled=state.busy||state.currentContextPending||!state.port||!state.scope?.observed||!state.scope.currentId||!state.directory;
     $('showWidget').disabled=!state.scope?.observed||!state.tab;
     $('showWidget').textContent='Show / hide widget on this tab';
     $('toolsReconnectVault').disabled=!state.directory;
@@ -97,6 +104,197 @@
     $('themeSelect').value=prefs.theme;$('autoClosePanel').checked=prefs.autoClosePanel;
     $('widgetEnabled').checked=prefs.widgetEnabled;$('libraryMonitorOnStart').checked=prefs.monitorOnStart;
     uiRefresh();
+  }
+  function exportCategoriesSelected(){return EXPORT_FIELDS.some(k=>exportPrefs[k]);}
+  function acceptExportPreferences(value){
+    const revision=Number.isSafeInteger(value?._revision)&&value._revision>=0?value._revision:0;
+    // Events and replies can cross in flight. Only the worker's monotonic
+    // revision determines which complete settings snapshot is authoritative.
+    if(revision<exportStoredRevision)return false;
+    exportStoredRevision=revision;exportPrefs=cleanExportPrefs(value);exportPrefsReady=true;return true;
+  }
+  function setExportMenu(open,focus=false){
+    $('exportContentMenu').classList.toggle('hidden',!open);
+    $('exportMenuToggle').setAttribute('aria-expanded',String(open));
+    if(open&&focus)$('exportAll').focus();
+  }
+  function selectorActive(){return SURFACE==='panel'&&!exportPrefs.completeConversation&&messageSelectorOpen;}
+  function messageStatus(text=''){
+    const node=$('messageSelectionStatus');node.textContent=text;node.classList.toggle('hidden',!text);
+  }
+  function setDownloadLabels(selectedFiles=null){
+    const main=$('exportCurrent'),menu=$('exportMenuToggle');
+    const withFiles=exportPrefs.uploadedFiles||exportPrefs.generatedFiles;
+    // Do not claim an exact format before the conversation has been read. No
+    // extra API request is made simply to populate a button label.
+    const label=!exportPrefs.completeConversation?'Select messages':withFiles?'Download':'Download MD';
+    const summary=$('exportContentSummary').textContent;
+    main.textContent=label;
+    main.title=selectorActive()?'Use Download selection below; Refresh reloads the current conversation.':
+      !exportPrefs.completeConversation?'Open the message selector. '+summary:
+      'Download the complete conversation. '+summary+'. '+(withFiles?'ZIP if original files are included; otherwise .md.':'Markdown (.md).');
+    menu.title='Export content settings: '+summary;
+    if(selectedFiles!==null){
+      $('downloadMessages').textContent=selectedFiles>0?'Download selection as .zip':'Download selection as .md';
+      $('downloadMessages').title=selectedFiles>0?`${selectedFiles} file reference(s) selected. ZIP includes Markdown, obtainable originals and a report.`:
+        'Download the selected message content as Markdown (.md).';
+    }
+  }
+  function applyExportPreferences(){
+    $('currentSelect').checked=exportPrefs.completeConversation;
+    const count=EXPORT_FIELDS.filter(k=>exportPrefs[k]).length;
+    $('exportAll').checked=count===EXPORT_FIELDS.length;$('exportAll').indeterminate=count>0&&count<EXPORT_FIELDS.length;
+    for(const node of document.querySelectorAll('[data-export-field]'))node.checked=exportPrefs[node.dataset.exportField];
+    const labels={questions:'Question',answers:'Answers',thinking:'Thinking',uploadedFiles:'Uploaded files',generatedFiles:'Generated files'};
+    $('exportContentSummary').textContent=(count===EXPORT_FIELDS.length?'All content':count?EXPORT_FIELDS.filter(k=>exportPrefs[k]).map(k=>labels[k]).join(', '):'No content selected')+
+      (exportPrefs.completeConversation?' · Complete conversation':' · Choose messages in the side panel');
+    $('messageSelector').classList.toggle('hidden',!selectorActive());
+    setDownloadLabels();
+    if(messageSelection)renderMessageSelection();
+    refreshButtons();
+  }
+  async function ensureExportPreferences(){
+    if(exportPrefsReady)return exportPrefs;
+    if(exportPrefsPromise)return exportPrefsPromise;
+    const operation=syncCommand('CAE_EXPORT_PREFS_GET').then(value=>{
+      acceptExportPreferences(value);applyExportPreferences();return exportPrefs;
+    }).finally(()=>{if(exportPrefsPromise===operation)exportPrefsPromise=null;});
+    exportPrefsPromise=operation;return operation;
+  }
+  async function patchExportPreferences(patch){
+    exportPrefsPending++;
+    exportPrefs=cleanExportPrefs({...exportPrefs,...patch});applyExportPreferences();
+    try{
+      // The worker serializes field patches from every extension page. A panel
+      // never writes its stale copy over another tab's settings.
+      const value=await syncCommand('CAE_EXPORT_PREFS_PATCH',{patch});
+      // The acknowledgement is authoritative even when its storage event has
+      // not arrived yet; a newer event received first takes precedence.
+      acceptExportPreferences(value);
+      applyExportPreferences();
+    }catch(error){
+      exportPrefsReady=false;await ensureExportPreferences().catch(()=>{});throw error;
+    }finally{exportPrefsPending--;refreshButtons();}
+  }
+  function selectionBinding(){return state.scope?.observed&&state.scope.currentId&&state.tab?.id?
+    {accountId:state.scope.accountId,conversationId:state.scope.currentId,tabId:state.tab.id}:null;}
+  function sameSelectionBinding(a,b=selectionBinding()){
+    return !!a&&!!b&&a.accountId===b.accountId&&a.conversationId===b.conversationId&&a.tabId===b.tabId;
+  }
+  function invalidateMessageSelection(message='Conversation changed. Click Refresh to load messages.'){
+    messageLoadGeneration++;messageSelectionLoading=false;messageSelection=null;messageLoadBinding=null;
+    $('messageRows').replaceChildren();$('messageSelectedCount').textContent='0 selected';
+    messageStatus(message);$('downloadMessages').disabled=true;setDownloadLabels(null);
+    $('downloadMessages').textContent='Download selection';
+  }
+  function selectionRows(){return messageSelection&&E?E.rows(messageSelection.chat,{...exportPrefs,completeConversation:true}):[];}
+  function chosenMessageIds(){
+    if(!messageSelection)return [];
+    return [...new Set(selectionRows().filter(row=>row.eligible&&messageSelection.selected.has(row.id)).flatMap(row=>row.messageIds))];
+  }
+  function refreshMessageSelectionCount(){
+    const rows=selectionRows(),selected=rows.filter(row=>row.eligible&&messageSelection.selected.has(row.id)),eligible=rows.filter(row=>row.eligible);
+    let files=0;
+    if(selected.length&&E?.attachments){
+      try{files=E.attachments(messageSelection.chat,{...exportPrefs,completeConversation:false,
+        conversationId:messageSelection.conversationId,branchNode:messageSelection.chat.branchNode,messageIds:chosenMessageIds()}).length;}catch{}
+    }
+    $('messageSelectedCount').textContent=`${selected.length} / ${eligible.length} messages selected${files?' · '+files+' files':''}`;
+    setDownloadLabels(files);
+    $('downloadMessages').disabled=state.busy||state.currentContextPending||messageSelectionLoading||!exportPrefsReady||!!exportPrefsPending||!sameSelectionBinding(messageSelection)||!selected.length;
+  }
+  function renderMessageSelection(){
+    if(!messageSelection)return;
+    const list=$('messageRows');list.replaceChildren();
+    const rows=selectionRows();
+    const messagesById=new Map(messageSelection.chat.messages.map(m=>[m.id,m]));
+    for(const row of rows){
+      const wrapper=document.createElement('div');wrapper.className='message-row';wrapper.dataset.eligible=String(row.eligible);wrapper.dataset.rowId=row.id;wrapper.dataset.role=row.role;
+      const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.className='message-checkbox';
+      checkbox.checked=row.eligible&&messageSelection.selected.has(row.id);checkbox.disabled=!row.eligible;
+      checkbox.setAttribute('aria-label',`Select ${row.role==='question'?'question':'answer'}: ${String(row.preview||'Attachment').slice(0,160)}`);
+      checkbox.addEventListener('change',()=>{checkbox.checked?messageSelection.selected.add(row.id):messageSelection.selected.delete(row.id);refreshMessageSelectionCount();});
+      const detail=document.createElement('details');detail.className='message-copy';detail.open=messageSelection.expanded.has(row.id);
+      detail.addEventListener('toggle',()=>{if(!messageSelection)return;detail.open?messageSelection.expanded.add(row.id):messageSelection.expanded.delete(row.id);if(detail.open)fillPreview();});
+      const summary=document.createElement('summary');
+      summary.setAttribute('aria-label',`Preview ${row.role}: ${row.preview}`);
+      const snippet=document.createElement('span');snippet.className='message-snippet';snippet.textContent=String(row.preview||'Attachment without text').slice(0,280);
+      const meta=document.createElement('span');meta.className='message-meta';meta.textContent=[row.hasThinking?'Thinking available':'',row.attachmentCount?row.attachmentCount+' file references':'',!row.eligible?'Excluded by content settings':''].filter(Boolean).join(' · ');
+      snippet.title=String(row.preview||'');
+      summary.append(snippet);detail.append(summary);
+      const preview=document.createElement('div');preview.className='message-preview';
+      // Populate text only when expanded, in original message order.
+      // Selection still contains the entire logical response (including Thinking).
+      const fillPreview=()=>{
+        if(preview.textContent)return;
+        const messages=row.messageIds.map(id=>messagesById.get(id)).filter(Boolean);
+        const names=[...new Set(messages.flatMap(m=>m.attachments||[]).map(a=>a.name||a.fileId||'Unnamed file'))];
+        const text=E.previewText(messages);
+        const hasBody=messages.some(m=>m.role===(row.role==='question'?'user':'assistant')&&E.textOf(m).trim());
+        preview.textContent=[text,...(hasBody?names.map(name=>'File: '+name):[])].join('\n\n');
+      };
+      if(detail.open)fillPreview();
+      detail.append(preview);if(meta.textContent)detail.append(meta);wrapper.append(checkbox,detail);list.append(wrapper);
+    }
+    if(!rows.length){const empty=document.createElement('p');empty.className='empty-state';empty.textContent='No selectable messages were returned.';list.append(empty);}
+    refreshMessageSelectionCount();
+  }
+  async function loadMessageSelection(expected=null){
+    if(SURFACE!=='panel')return;
+    const wanted=expected||selectionBinding();
+    messageSelectorOpen=true;messageSelectionLoading=true;messageLoadBinding=wanted;
+    const generation=++messageLoadGeneration;
+    $('messageSelector').classList.remove('hidden');messageStatus('Loading messages…');refreshButtons();
+    try{
+      await ensureExportPreferences();
+      if(exportPrefs.completeConversation){$('messageSelector').classList.add('hidden');return;}
+      if(!E)throw Error('Selection helper is unavailable. Reload the extension.');
+      await reconnect({force:true});
+      if(generation!==messageLoadGeneration)return;
+      const binding=selectionBinding();
+      if(!binding||wanted&&!sameSelectionBinding(wanted,binding))throw Error('The active chat changed. Click Refresh in the intended chat.');
+      messageLoadBinding=binding;
+      const item=state.chats.find(c=>c.id===binding.conversationId)||{id:binding.conversationId,title:state.tab?.title||'Current chat'};
+      const chat=await call('CAE_GET_CHAT',{chat:item,expectedAccountId:binding.accountId});
+      if(generation!==messageLoadGeneration)return;
+      if(!sameSelectionBinding(binding)||chat?.id!==binding.conversationId)throw Error('The active chat changed while messages were loading.');
+      if(!Array.isArray(chat.messages)||!chat.messages.length)throw Error('No readable messages were returned. Reload messages to try again.');
+      const previous=messageSelection;
+      const rows=E.rows(chat,{...exportPrefs,completeConversation:true});
+      const sameBranch=sameSelectionBinding(previous,binding)&&previous.chat.branchNode===chat.branchNode;
+      messageSelection={...binding,chat,item,selected:sameBranch?previous.selected:new Set(rows.map(r=>r.id)),expanded:sameBranch?previous.expanded:new Set()};
+      messageStatus();
+      renderMessageSelection();
+    }catch(error){
+      if(generation!==messageLoadGeneration)return;
+      messageSelection=null;$('messageRows').replaceChildren();$('messageSelectedCount').textContent='0 selected';
+      messageStatus(error?.message||String(error));fail(error);
+    }finally{if(generation===messageLoadGeneration){messageSelectionLoading=false;messageLoadBinding=null;refreshButtons();if(messageSelection)refreshMessageSelectionCount();}}
+  }
+  function selectMessageRows(action){
+    if(!messageSelection||messageSelectionLoading)return;
+    const rows=selectionRows().filter(r=>r.eligible);
+    if(action==='none')messageSelection.selected.clear();
+    else if(action==='invert')for(const row of rows)messageSelection.selected.has(row.id)?messageSelection.selected.delete(row.id):messageSelection.selected.add(row.id);
+    else{
+      messageSelection.selected.clear();
+      for(const row of rows)if(action==='all'||row.role===action)messageSelection.selected.add(row.id);
+    }
+    renderMessageSelection();
+  }
+  async function downloadMessageSelection(){
+    if($('downloadMessages').disabled||!messageSelection)return;
+    const bound=messageSelection,ids=chosenMessageIds();
+    try{
+      const selection={...exportPrefs,completeConversation:false,conversationId:bound.conversationId,
+        branchNode:bound.chat.branchNode,messageIds:ids};
+      E.validate(bound.chat,selection);
+      const fresh=await call('CAE_STATUS',{force:true},null,12000);
+      const active=sourceTabId?await chrome.tabs.get(sourceTabId):(await chrome.tabs.query({active:true,currentWindow:true}))[0];
+      if(messageSelection!==bound||state.currentContextPending||active?.id!==bound.tabId||!sameSelectionBinding(bound)||fresh.accountId!==bound.accountId||fresh.currentId!==bound.conversationId)
+        throw Error('Conversation changed before export. Reload messages in the intended chat.');
+      await exportChats([bound.item],{mode:'current',destination:'download',exportSelection:selection});
+    }catch(error){fail(error);}
   }
   const CHAT_URL = /^https:\/\/(chatgpt\.com|chat\.openai\.com)(\/|$)/i;
   const LIST_MAX_AGE_MS = 5 * 60_000;
@@ -164,7 +362,18 @@
     if(!value)scheduleReconnect(150);
   }
   function refreshButtons(){
-    $('exportCurrent').disabled=state.busy||!state.port||!state.scope?.observed||!state.scope?.currentId||!$('currentSelect').checked;
+    if(messageSelection&&!sameSelectionBinding(messageSelection))invalidateMessageSelection();
+    // The top action opens the selector; once open, only its footer submits
+    // a selective export. Keep the split menu active so categories can change.
+    $('exportCurrent').disabled=selectorActive()||state.busy||state.currentContextPending||!state.port||!state.scope?.observed||!state.scope?.currentId||!exportPrefsReady||!!exportPrefsPending||messageSelectionLoading||!exportCategoriesSelected();
+    $('quickVault').classList.toggle('hidden',selectorActive());
+    setDownloadLabels();
+    $('exportMenuToggle').disabled=!exportPrefsReady;
+    $('currentSelect').disabled=!exportPrefsReady||!!exportPrefsPending;
+    $('exportAll').disabled=!exportPrefsReady||!!exportPrefsPending;
+    for(const node of document.querySelectorAll('[data-export-field]'))node.disabled=!exportPrefsReady||!!exportPrefsPending;
+    $('reloadMessages').disabled=messageSelectionLoading||state.busy||state.currentContextPending||!state.scope?.observed||!state.scope?.currentId;
+    if(messageSelection)refreshMessageSelectionCount();else $('downloadMessages').disabled=true;
     $('exportSelected').disabled=state.busy||!state.port||!state.scope?.observed||!(state.selected.size||state.selectedProjects.size);
     $('snapshotSettings').disabled=state.busy||!state.port||!state.scope?.observed||!state.directory;
     $('refreshLibrary').disabled=state.busy||state.librarySubmitting||!!state.libraryJob?.job?.active||!state.port||!state.scope?.observed||!state.directory;
@@ -306,7 +515,7 @@
     }
     const previousAccount=state.lastVerifiedWorkspace?.accountId;
     if(previousAccount&&previousAccount!==scope.accountId){state.selected.clear();state.selectedProjects.clear();state.chats=[];state.projects=[];state.listAccountId=null;state.listLoadedAt=0;state.listSource=null;state.sync=null;state.librarySelected.clear();}
-    state.scope = scope;
+    state.scope = scope;state.currentContextPending=false;
     chrome.runtime.sendMessage({type:'CAE_UI_BIND',tabId:tab.id,accountId:scope.accountId,display:scope.display,observed:scope.observed}).catch(()=>{});
     if(state.mode==='library')renderLibrary();
     rememberVerifiedWorkspace(scope,tab);
@@ -475,12 +684,12 @@
     state.listLoading=pending;state.listLoadAccount=account;return pending;
   }
 
-  function libraryEligible(f){return !!f.archive_eligibility?.selectable&&!f.managed_by_project_sources&&!['saved','already_archived'].includes(f.archive?.status);}
+  function libraryEligible(f){return !!f.archive_eligibility?.selectable&&!['saved','already_archived'].includes(f.archive?.status);}
   function renderLibrary(){
     const catalog=state.libraryAccountId===libraryAccount()?state.library:null;
     if(!catalog){$('libraryGroups').replaceChildren();$('librarySummary').textContent='No saved inventory for this workspace.';$('libraryCount').textContent='No inventory loaded.';libraryVisible=[];refreshButtons();return;}
     const summary=catalog.summary||{};
-    $('librarySummary').textContent=`${summary.total||0} files - ${catalog.status||'unknown'} - ${summary.project_source_excluded||0} Project Sources excluded`;
+    $('librarySummary').textContent=`${summary.total||0} records (${summary.library_files||0} in Library, ${summary.project_source_only||0} Source-only) - ${catalog.status||'unknown'} - ${summary.project_source_excluded||0} verified Source copies excluded`;
     const needle=$('librarySearch').value.toLowerCase().trim(),context=$('libraryContextFilter').value,origin=$('libraryOrigin').value,media=$('libraryMedia').value,arch=$('libraryArchiveFilter').value;
     const filtered=(catalog.items||[]).filter(f=>{
       const saved=['saved','already_archived'].includes(f.archive?.status);
@@ -495,10 +704,10 @@
     for(const [o,label] of [['uploaded','Uploaded'],['generated','Generated'],['unknown','Unknown origin']])for(const [m,mlabel] of [['image','Images'],['file','Other files']]){
       const all=catalog.items.filter(f=>f.origin===o&&f.media_class===m),files=filtered.filter(f=>f.origin===o&&f.media_class===m);if(!files.length)continue;
       groups.push({id:o+'/'+m,name:label+' - '+mlabel,selectableIds:all.filter(libraryEligible).map(f=>f.id),countText:files.length===all.length?String(files.length):`${files.length}/${all.length}`,
-        items:files.map(f=>({id:f.id,title:f.name||f.id,selectable:!!f.archive_eligibility?.selectable&&!f.managed_by_project_sources,archived:['saved','already_archived'].includes(f.archive?.status),disabled:!libraryEligible(f),
-          reason:f.managed_by_project_sources?'Project Source: Vault copy not verified; use Project Sources export':f.archive_eligibility?.reason||'Not selectable',badge:f.managed_by_project_sources?'Source':f.archive?.status==='saved'?'Saved':f.archive?.status==='failed'?'Failed':'',
+        items:files.map(f=>({id:f.id,title:f.name||f.id,selectable:!!f.archive_eligibility?.selectable,archived:['saved','already_archived'].includes(f.archive?.status),disabled:!libraryEligible(f),
+          reason:f.source_copy_verified?'Verified original in Project Sources Vault export':f.source_only?'Project Source reference only':f.managed_by_project_sources?'Project Source linked; no verified Vault copy':f.archive_eligibility?.reason||'Not selectable',badge:f.source_copy_verified?'Saved Source':f.managed_by_project_sources?'Source':f.archive?.status==='saved'?'Saved':f.archive?.status==='failed'?'Failed':'',
           note:[f.format_class,f.origin_status==='inferred'?'inferred':f.origin==='unknown'?'origin unknown':null,
-            f.managed_by_project_sources?'Project Source: Library download disabled (Vault copy not verified)':null,...(f.placements||[]).filter(p=>p.type==='project_source').map(p=>p.project_name),
+            f.source_copy_verified?'Project Source: verified copy in Vault; library download disabled':f.managed_by_project_sources?'Project Source linked; library original remains selectable until a Vault copy is verified':null,...(f.placements||[]).filter(p=>p.type==='project_source').map(p=>p.project_name),
             f.library_locations?.[0]?.folder_path,f.archive?.http_status?'HTTP '+f.archive.http_status:null].filter(Boolean).join(' - ')}))});
     }
     CAEUITree.render($('libraryGroups'),{groups,selected:state.librarySelected,collapsed:libraryCollapsed,disabled:!!state.libraryJob?.job?.active,kind:'library',
@@ -770,10 +979,12 @@
         if (!(await ChatArchiveVault.hasPermission(boundDirectory,true))) throw new Error('Vault write permission required.');
         await ChatArchiveManualStore.bind(requestId,boundDirectory);
       }
-      if(state.scope?.accountId!==boundScope.accountId||state.tab?.id!==boundTab)throw Error('Workspace changed before acceptance. Start again in the intended workspace.');
+      if(state.scope?.accountId!==boundScope.accountId||state.tab?.id!==boundTab||
+        exportMode==='current'&&state.scope?.currentId!==items[0]?.id)throw Error('Workspace or conversation changed before acceptance. Start again in the intended workspace.');
       const j=await syncCommand('CAE_MANUAL_SUBMIT',{options:{requestId,
         accountId:boundScope.accountId,display:boundScope.display,tabId:boundTab,
         destination,mode:exportMode,items:items.map(x=>({...x})),projects:projectSnapshot,
+        ...(options.exportSelection?{exportSelection:structuredClone(options.exportSelection)}:{}),
         selectedProjectIds:selectedProjects,
         fullWorkspace:exportMode==='all'&&totalChats>0&&items.length===totalChats}});
       showManual(j);
@@ -805,10 +1016,28 @@
   }
 
   async function currentChat(destination='download') {
-    if (state.busy || !$('exportCurrent') || $('exportCurrent').disabled) return;
+    if (state.busy || destination==='download'&&$('exportCurrent').disabled||destination==='vault'&&$('quickVault').disabled) return;
     if (!state.scope?.currentId) { status('Open a ChatGPT conversation first.'); return; }
+    setExportMenu(false);
+    if(destination==='download'&&!exportPrefs.completeConversation){
+      const binding=selectionBinding();
+      if(SURFACE!=='panel'){openPanel('current',false,{selectMessages:true,...binding});return;}
+      if(messageSelection&&sameSelectionBinding(messageSelection)){
+        messageSelectorOpen=true;applyExportPreferences();$('messageSelector').scrollIntoView({block:'nearest'});
+      }else await loadMessageSelection(binding);
+      return;
+    }
     const item=state.chats.find(c=>c.id===state.scope.currentId)||{id:state.scope.currentId,title:'Current chat',project:'',projectId:''};
-    await exportChats([item],{mode:'current',destination});
+    const exportSelection=destination==='download'?{...exportPrefs,completeConversation:true,conversationId:item.id}:null;
+    if(destination==='download'){
+      const bound=selectionBinding();
+      const fresh=await call('CAE_STATUS',{force:true},null,12000);
+      const active=sourceTabId?await chrome.tabs.get(sourceTabId):(await chrome.tabs.query({active:true,currentWindow:true}))[0];
+      if(!sameSelectionBinding(bound)||state.currentContextPending||active?.id!==bound.tabId||
+        fresh.accountId!==bound.accountId||fresh.currentId!==bound.conversationId)
+        throw Error('Conversation changed before export. Click Download MD in the intended chat.');
+    }
+    await exportChats([item],{mode:'current',destination,...(exportSelection?{exportSelection}:{})});
   }
 
   async function syncCommand(type, extra={}) {
@@ -920,11 +1149,21 @@
     }
   });
   window.addEventListener('focus',()=>{refreshVaultStatus().catch(()=>{});scheduleReconnect();});
-  chrome.tabs.onActivated?.addListener(()=>{
-    state.nextAutoAttempt=0;state.autoFailures=0;scheduleReconnect(250,true);
+  chrome.tabs.onActivated?.addListener(info=>{
+    const ownWindow=state.tab?.windowId??uiWindowId;
+    if(sourceTabId||Number.isInteger(info?.windowId)&&Number.isInteger(ownWindow)&&info.windowId!==ownWindow)return;
+    state.currentContextPending=true;
+    const bound=messageSelection||messageLoadBinding;
+    if(bound&&Number.isInteger(info?.tabId)&&info.tabId!==bound.tabId){invalidateMessageSelection();refreshButtons();}
+    refreshButtons();state.nextAutoAttempt=0;state.autoFailures=0;scheduleReconnect(250,true);
   });
   chrome.tabs.onUpdated?.addListener((tabId,change,tab)=>{
-    if (tab.active&&(change.url||change.status==='complete')) {
+    const ownWindow=state.tab?.windowId??uiWindowId;
+    if(sourceTabId&&tabId!==sourceTabId||Number.isInteger(tab?.windowId)&&Number.isInteger(ownWindow)&&tab.windowId!==ownWindow)return;
+    const bound=messageSelection||messageLoadBinding;
+    if(change.url&&bound&&tabId===bound.tabId){invalidateMessageSelection();refreshButtons();}
+    if (tab?.active&&(change.url||change.status==='complete')) {
+      state.currentContextPending=true;refreshButtons();
       state.nextAutoAttempt=0;state.autoFailures=0;scheduleReconnect(350,true);
     }
   });
@@ -944,6 +1183,12 @@
   function consumeIntent(intent){
     if(!intent||uiIntent===intent.nonce)return;uiIntent=intent.nonce;
     if(intent.mode==='monitor')route('activity');else if(['all','current','library'].includes(intent.mode)){mode(intent.mode);if(intent.mode==='all'&&intent.refresh)ensureListLoaded(true).catch(fail);}
+    if(intent.mode==='current'&&intent.selectMessages===true){
+      // A stale intent must never select messages from whichever tab happened
+      // to become active later. Scope and conversation are checked after load.
+      if(Date.now()-Number(intent.at)>5*60_000)return;
+      loadMessageSelection({accountId:intent.accountId,conversationId:intent.conversationId,tabId:intent.tabId}).catch(fail);
+    }
   }
 
   chrome.storage.onChanged.addListener((changes, area) => {
@@ -986,7 +1231,7 @@
   for(const id of ['outputDownload','outputFolder'])$(id).addEventListener('change',refreshButtons);
   $('reconnect').addEventListener('click', () => reconnect({force:true}).catch(fail));
   $('loadAll').addEventListener('click',()=>{if(SURFACE!=='panel')openPanel('all',true);else{mode('all');ensureListLoaded(true);}});
-  $('exportCurrent').addEventListener('click', () => currentChat());
+  $('exportCurrent').addEventListener('click', () => currentChat().catch(fail));
   $('exportSelected').addEventListener('click', () => exportChats(state.chats.filter(c => state.selected.has(c.id))));
   $('snapshotSettings').addEventListener('click',()=>snapshotSettings().catch(fail));
   $('search').addEventListener('input', renderChats);
@@ -1019,8 +1264,17 @@
       chrome.tabs.getCurrent?.().then(t=>t?.id?chrome.tabs.remove(t.id):window.close()).catch(()=>window.close());
     }else route(previousView);
   });
-  $('quickVault').addEventListener('click',()=>currentChat('vault'));
-  $('currentSelect').addEventListener('change',refreshButtons);
+  $('quickVault').addEventListener('click',()=>currentChat('vault').catch(fail));
+  $('currentSelect').addEventListener('change',()=>patchExportPreferences({completeConversation:$('currentSelect').checked}).catch(fail));
+  $('exportMenuToggle').addEventListener('click',()=>setExportMenu($('exportContentMenu').classList.contains('hidden')));
+  $('exportMenuToggle').addEventListener('keydown',event=>{if(event.key==='ArrowDown'){event.preventDefault();setExportMenu(true,true);}});
+  $('exportAll').addEventListener('change',()=>patchExportPreferences(Object.fromEntries(EXPORT_FIELDS.map(k=>[k,$('exportAll').checked]))).catch(fail));
+  for(const node of document.querySelectorAll('[data-export-field]'))node.addEventListener('change',()=>patchExportPreferences({[node.dataset.exportField]:node.checked}).catch(fail));
+  document.addEventListener('click',event=>{if(!event.target.closest('.export-split'))setExportMenu(false);});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('exportContentMenu').classList.contains('hidden')){setExportMenu(false);$('exportMenuToggle').focus();}});
+  for(const node of document.querySelectorAll('[data-message-selection]'))node.addEventListener('click',()=>selectMessageRows(node.dataset.messageSelection));
+  $('reloadMessages').addEventListener('click',()=>loadMessageSelection().catch(fail));
+  $('downloadMessages').addEventListener('click',()=>downloadMessageSelection().catch(fail));
   $('openChats').addEventListener('click',()=>openPanel('all'));$('openFiles').addEventListener('click',()=>openPanel('library'));
   $('openMonitor').addEventListener('click',()=>openPanel('monitor'));$('modeMonitor').addEventListener('click',()=>route('activity'));
   $('openStableSettings').addEventListener('click',()=>openOptions('settings'));
@@ -1035,9 +1289,15 @@
     .catch(fail));
   chrome.storage.onChanged.addListener((changes,area)=>{
     if(area==='local'&&changes[U.KEY]){prefs=U.preferences(changes[U.KEY].newValue);applyPreferences();}
+    if(area==='local'&&changes[EXPORT_PREFS_KEY]){
+      const value=changes[EXPORT_PREFS_KEY].newValue;
+      if(value===undefined)exportStoredRevision=-1;
+      if(acceptExportPreferences(value))applyExportPreferences();
+    }
     if(area==='session'&&SURFACE==='panel'&&changes['cae.ui.intent.'+uiWindowId])consumeIntent(changes['cae.ui.intent.'+uiWindowId].newValue);
   });
   chrome.storage.local.get(U.KEY).then(r=>{prefs=U.preferences(r[U.KEY]);applyPreferences();}).catch(()=>{});
+  ensureExportPreferences().catch(error=>fail(Error('Export settings unavailable: '+(error?.message||error))));
   if(['settings','tools','activity'].includes(location.hash.slice(1))&&SURFACE!=='panel')uiView=location.hash.slice(1);
   applyModeView(state.mode);
 })();

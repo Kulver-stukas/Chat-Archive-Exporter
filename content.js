@@ -12,7 +12,7 @@
     return false;
   });
   const allowedTypes = new Set(['CAE_STATUS', 'CAE_LIST', 'CAE_GET_CHAT', 'CAE_CONTEXT',
-    'CAE_SOURCE_START', 'CAE_SOURCE_READ', 'CAE_SOURCE_CLOSE', 'CAE_BG_PAGE', 'CAE_LIBRARY_INVENTORY', 'CAE_LIBRARY_PAGE', 'CAE_LIBRARY_CANCEL', 'CAE_ASSET_START']);
+    'CAE_SOURCE_START', 'CAE_SOURCE_READ', 'CAE_SOURCE_CLOSE', 'CAE_BG_PAGE', 'CAE_LIBRARY_INVENTORY', 'CAE_LIBRARY_PAGE', 'CAE_LIBRARY_CANCEL', 'CAE_ASSET_START', 'CAE_ATTACHMENT_START']);
   let sourceOwner = null;
   chrome.runtime.onConnect.addListener(port => {
     if (port.name !== 'CAE_API' || (port.sender?.id && port.sender.id !== chrome.runtime.id)) return;
@@ -35,14 +35,16 @@
       if (!msg || !allowedTypes.has(msg.type) || !Number.isInteger(msg.id)) return;
       try {
         if (msg.type === 'CAE_SOURCE_CLOSE') { await closeSource(); send(msg.id, { result: { closed: true } }); }
-        else if (msg.type === 'CAE_SOURCE_START' || msg.type === 'CAE_ASSET_START') {
+        else if (['CAE_SOURCE_START','CAE_ASSET_START','CAE_ATTACHMENT_START'].includes(msg.type)) {
           if (sourceOwner) throw new Error('Another source transfer is still active in this tab.');
           sourceOwner = port;
           const abort = new AbortController(); controller = abort;
           const vaultTransfer = Number(msg.maxBytes) > 25 * 1024 * 1024;
           sourceTimer = setTimeout(() => abort.abort(), vaultTransfer ? 20 * 60_000 : 120000);
           try {
-            const location = msg.type === 'CAE_ASSET_START'
+            const location = msg.type === 'CAE_ATTACHMENT_START'
+              ? await ChatArchiveApi.attachmentLocation(msg.attachment, msg.expectedAccountId || '', abort.signal)
+              : msg.type === 'CAE_ASSET_START'
               ? await ChatArchiveApi.assetLocation(msg.fileId, msg.expectedAccountId || '', abort.signal)
               : await ChatArchiveApi.sourceLocation(msg.fileId, msg.projectId, msg.expectedAccountId || '', abort.signal, Boolean(msg.background));
             if (abort.signal.aborted || disconnected) throw new Error('Source transfer cancelled.');
@@ -87,63 +89,9 @@
     });
   });
 
-  function inject() {
-    if (!document.body) return;
-    const previous = document.getElementById('cae-inpage-button');
-    if (previous?.dataset?.caeVersion === runningVersion) return;
-    // Retire a stale button installed by a previous extension version. Its
-    // click handler belongs to an invalidated extension context.
-    previous?.remove();
-    const btn = document.createElement('button');
-    btn.id = 'cae-inpage-button';
-    if (btn.dataset) btn.dataset.caeVersion = runningVersion;
-    btn.type = 'button';
-    btn.textContent = '↓ MD';
-    btn.title = 'Export the current ChatGPT conversation as Markdown';
-    Object.assign(btn.style, { position: 'fixed', zIndex: '2147483640', bottom: '112px', right: '22px',
-      padding: '8px 12px', borderRadius: '11px', border: '1px solid #7775', background: '#282b30',
-      color: 'white', font: '600 12px system-ui,sans-serif', cursor: 'pointer', boxShadow: '0 4px 16px #0003' });
-    btn.addEventListener('click', async ev => {
-      ev.preventDefault(); ev.stopPropagation();
-      if (btn.disabled) return;
-      btn.disabled = true;
-      btn.textContent = 'Exporting…';
-      try {
-        const response=await chrome.runtime.sendMessage({type:'CAE_MANUAL_QUICK'});
-        if(!response?.ok)throw new Error(response?.error||'Manual export controller unavailable.');
-        btn.textContent='Queued';
-        btn.title='Export accepted. You may close the panel; keep a ChatGPT tab available for pending reads.';
-      } catch (e) {
-        btn.title = String(e?.message || e);
-        btn.textContent = 'Error';
-        console.warn('Chat Archive Exporter:', e);
-      } finally {
-        setTimeout(() => { btn.textContent = '↓ MD'; btn.disabled = false; }, 1600);
-      }
-    });
-    document.body.appendChild(btn);
-  }
-  function refresh() {
-    // Polling the route at a bounded cadence avoids observing the full dynamic
-    // ChatGPT DOM. No export or network activity is triggered by this routine.
-    const hasChat = /\/c\/[0-9a-f-]{36}(?:\/|$)/i.test(location.pathname);
-    const button = document.getElementById('cae-inpage-button');
-    if (!hasChat) { if (button) button.remove(); return; }
-    if (!button || button.dataset?.caeVersion !== runningVersion) inject();
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', refresh, { once: true });
-  else refresh();
-  window.addEventListener('popstate', refresh);
-  window.addEventListener('pageshow', refresh);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
-  // SPA route transitions do not necessarily generate popstate events.
-  // 1.5s polling is fixed-cost and skips hidden tabs.
-  const routeTimer = setInterval(() => {
-    // Old extension contexts are invalidated on an update. A new build may
-    // re-inject its own bridge; do not let this obsolete timer run forever.
-    let usable = false;
-    try { usable = Boolean(chrome.runtime?.id); } catch (_) {}
-    if (!usable) { clearInterval(routeTimer); return; }
-    if (document.visibilityState === 'visible' && document.body) refresh();
-  }, 1500);
+  // Export controls live in the popup and side panel. Remove a legacy button
+  // left by an older content-script context without installing page UI/timers.
+  const retireLegacyButton=()=>document.getElementById('cae-inpage-button')?.remove();
+  retireLegacyButton();
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',retireLegacyButton,{once:true});
 })();

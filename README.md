@@ -1,6 +1,58 @@
-# Chat Archive Exporter v0.1.7 Beta 1 (rev.5)
+# Chat Archive Exporter v0.1.9 Beta 1
 
-Popup-first Export / Activity / Settings, separate Tools, on-demand selection panel and optional monitoring widget. Archive core remains v0.1.6.11 rev.1. See `release-notes/v0.1.7-beta.1.md`, `RELEASE_NOTES_v0.1.7-rev5.md`, and `TEST_REPORT_v0.1.7-rev5.md` for behavior and verification limits.
+GitHub pre-release based on v0.1.9 rev.3. Includes v0.1.8 archive maintenance and v0.1.9 selective current-chat export. See `release-notes/v0.1.9-beta.1.md` for the consolidated release notes and `TODO_v0.1.9.md` for remaining work.
+
+# Chat Archive Exporter v0.1.9 rev.3 — Image originals and selector polish
+
+Selective conversation export now recognizes original-file references in visible image-generation tool outputs on the active branch. Recognized image-only responses show filenames in the selector and participate in the ZIP export. Original availability is reported explicitly; legacy full Vault archives retain their scope.
+
+When the selector is open, the upper download action is inactive, its category menu remains usable, and the complete Save to Vault action is hidden. The lower download action shows the expected ZIP or Markdown format. Explanatory paragraphs are replaced with tooltips and accessible descriptions. Selection is still message-level; individual file checkboxes remain a TODO.
+
+**Upgrade:** replace the files in the existing unpacked extension directory, reload, and refresh ChatGPT. No new permissions or Vault migration. Numeric manifest version is 0.1.9; version_name identifies rev.3. See RELEASE_NOTES_v0.1.9-rev3.md and TEST_REPORT_v0.1.9-rev3.md (71 automated tests passed; live authenticated image retrieval pending).
+
+# Chat Archive Exporter v0.1.9 rev.2 — Compact message selector
+
+This UI revision retains the v0.1.9 rev.1 selective-export behavior. Collapsed question and answer rows are single-line, with answers indented. Expanded previews display actual questions/responses, never Thinking in place of an answer. Thinking and file eligibility still follow the saved export settings. See RELEASE_NOTES_v0.1.9-rev2.md and TEST_REPORT_v0.1.9-rev2.md.
+
+**Upgrade:** replace files in the same unpacked extension directory, click Reload, and refresh ChatGPT. Do not clear extension storage or the Vault. The Chrome manifest version remains 0.1.9; version_name identifies rev.2.
+
+# Chat Archive Exporter v0.1.9 rev.1 — Selective export test build
+
+Based on v0.1.8 rev.1. **Download MD** now has a split-button menu: All / Question / Answers / Thinking, then Uploaded files / Generated files. All and Complete conversation are enabled by default.
+
+With **Complete conversation** enabled, the main button downloads the current conversation using the chosen content categories. Turn it off to choose individual questions and logical answers in the existing side panel. Available Thinking and original files can be selected independently of message text. Preferences are shared by all extension instances in the browser profile and survive restart; message selections remain bound to their exact conversation and branch.
+
+Text-only exports produce Markdown. Included original-file references produce a ZIP containing Markdown, received originals under attachments/Uploaded or attachments/Generated, and export-report.json. Files belonging to unselected messages are not requested. Unavailable/expired files and limits are reported explicitly. Limits: 25 MiB per original, 100 MiB received originals per job, 128 MiB staging, 12 MiB conversation snapshot/Markdown.
+
+Save to Vault, batch archives and background capture retain the complete archive format and existing paths. No additional Chrome permissions. No new export button is added to the ChatGPT page.
+
+**Upgrade:** replace files in the same unpacked extension directory, click Reload on the browser extensions page, and reload ChatGPT. Preserve extension storage and the existing Vault.
+
+**Verification:** 70/70 Node suites pass, including byte-checked ZIP output and durable selected-export recovery. UI resources and syntax were checked. The new real-browser UI suite is included but could not run because this environment has no working local Chromium. Authenticated Chrome/Edge testing is still required for the new feature.
+
+See RELEASE_NOTES_v0.1.9-rev1.md, TEST_REPORT_v0.1.9-rev1.md and UAT_v0.1.9-rev1.md. Fine export controls considered from the supplied Exporter v6.13.2 reference are recorded in TODO_v0.1.9.md. This is a test build; no GitHub release was published for this revision.
+
+## Earlier documentation
+
+The material below records earlier versions. The selective-export behavior above supersedes earlier statements that individual content selection is unavailable. The v0.1.8 verified-copy policy supersedes unconditional Project Source exclusion.
+
+---
+
+# Chat Archive Exporter v0.1.8 rev.1 — Technical test build
+
+This release continues from the published **v0.1.7 Beta 1 UX/UI**. It fixes Project Sources/Library deduplication using SHA-256-verified Vault originals, aliases filenames rejected by Chromium while recording the exact original name, and preserves Project Sources missing from Library together with evidence-backed chat/message references. The existing Popup, Side Panel, widget, chat export and Vault layout are retained.
+
+**Upgrade:** replace files in the same unpacked extension directory, click **Reload** at `chrome://extensions`, and reload the ChatGPT tab. Do not uninstall, clear IndexedDB or reselect the Vault when permission is still granted.
+
+**Verification:** 62 JavaScript test suites and the UI smoke tests pass with mocked APIs/permissions. Real authenticated Chrome and Edge UAT is still required; see `UAT_v0.1.8-rev1.md` and `TEST_REPORT_v0.1.8-rev1.md`. No new Chrome permissions. Selective Prompt/Thinking/Response export is deferred to P2 and is not enabled.
+
+The text below documents earlier releases; any claims of unconditional Project Source exclusion are superseded by v0.1.8's verified-copy policy.
+
+---
+
+# v0.1.7 rev.4 - UX/UI test build
+
+Popup-first Export / Activity / Settings, separate Tools, on-demand selection panel and optional monitoring widget. Archive core remains v0.1.6.11 rev.1. See `RELEASE_NOTES_v0.1.7-rev3.md` and `TEST_REPORT_v0.1.7-rev3.md` for installation, UI behavior and validation limits.
 
 The v0.1.7 rev.4 Side Panel shows a saved chat list from a workspace-scoped UI cache or (when readable) from Vault `.workspace.json` / the background mirror, then refreshes through the normal ChatGPT API. The panel does not write chat-list metadata back into Vault; current chat export and Vault writing are unchanged.
 

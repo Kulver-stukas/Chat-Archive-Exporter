@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Chat Archive Exporter",
   "description": "ChatGPT Markdown and original-source export to Vault, with opt-in workspace-scoped background updates.",
-  "version": "0.1.7",
+  "version": "0.1.9",
   "minimum_chrome_version": "116",
   "permissions": [
     "sidePanel",
@@ -38,6 +38,7 @@
         "https://chat.openai.com/*"
       ],
       "js": [
+        "lib/export-selection.js",
         "lib/normalize.js",
         "lib/config-inventory.js",
         "lib/source-transfer.js",
@@ -50,7 +51,7 @@
       "run_at": "document_idle"
     }
   ],
-  "version_name": "0.1.7 Beta 1 (rev.5)",
+  "version_name": "0.1.9 rev.3 - Image originals and selector polish",
   "icons": {
     "16": "icons/cae-base-16.png",
     "32": "icons/cae-base-32.png",

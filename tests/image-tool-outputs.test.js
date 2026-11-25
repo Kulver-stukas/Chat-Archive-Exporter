@@ -1,0 +1,53 @@
+'use strict';
+const assert=require('node:assert/strict');
+const N=require('../lib/normalize'),E=require('../lib/export-selection');
+const cid='11111111-1111-1111-1111-111111111111';
+const image='file_00000000000000000000000000000001';
+const upload='file_00000000000000000000000000000002';
+const oldImage='file-OldAssetPointer1';
+const part=(id,metadata={})=>({content_type:'image_asset_pointer',asset_pointer:'sediment://'+id+'?width=1024&sig=DO_NOT_EXPORT',metadata});
+const raw={id:cid,title:'Image outputs',current_node:'a2',mapping:{}};
+function node(id,parent,role,parts,metadata={},extra={}){
+ raw.mapping[id]={id,parent,children:[],message:{id,author:{role},content:{content_type:'multimodal_text',parts},metadata,...extra}};
+ if(parent)raw.mapping[parent].children.push(id);
+}
+node('q1',null,'user',[part(upload)],{attachments:[{id:upload,name:'Reference.png',mime_type:'image/png'}]});
+node('t1','q1','assistant',[],{}, {content:{content_type:'thoughts',thoughts:[{summary:'Visible summary',content:'Plan'}]}});
+node('image1','t1','tool',[part(image),'SERVICE OUTPUT NOT FOR EXPORT'],{image_gen_title:'Generated illustration'});
+node('hidden','image1','tool',[part('file_hidden')],{image_gen_title:'Hidden image',is_visually_hidden_from_conversation:true});
+node('unrelated','hidden','tool',[part('file_unrelated')]);
+node('reasoning','unrelated','tool',[part('file_reasoning',{dalle:{}})],{reasoning_status:'is_reasoning'});
+node('q2','reasoning','user',['Second request']);
+node('image2','q2','tool',[part(oldImage,{dalle:{gen_id:'example'}})]);
+node('a2','image2','assistant',['A textual answer.']);
+node('alternate','q2','tool',[part('file_other_branch')],{image_gen_title:'Other branch'});
+const chat=N.normalizeChat(raw);
+const all=E.attachments(chat,E.DEFAULTS);
+assert.deepEqual(all.map(a=>a.fileId),[upload,image,oldImage]);
+assert.equal(all[0].name,'Reference.png');
+assert.equal(all[0].origin,'uploaded');
+assert.equal(all[1].name,'Generated illustration');
+assert.equal(all[1].origin,'generated');
+assert.equal(all[1].mediaClass,'image');
+assert.equal(all[1].messageId,'image1');
+assert.equal(chat.messages.find(m=>m.id==='image1').textContent,'');
+assert(!JSON.stringify(chat).includes('DO_NOT_EXPORT'));
+assert(!JSON.stringify(chat).includes('SERVICE OUTPUT NOT FOR EXPORT'));
+const rows=E.rows(chat,E.DEFAULTS);
+assert.equal(rows.length,4);
+assert.match(rows[0].preview,/Reference\.png/);
+assert.match(rows[1].preview,/Generated illustration/);
+assert.equal(rows[1].attachmentCount,1);
+assert.equal(rows[3].preview,'A textual answer.');
+assert.equal(E.rows(chat,{...E.DEFAULTS,generatedFiles:false,thinking:false})[1].eligible,false);
+const selection={...E.DEFAULTS,completeConversation:false,conversationId:cid,branchNode:'a2',messageIds:rows[1].messageIds};
+assert.deepEqual(E.attachments(chat,selection).map(a=>a.fileId),[image]);
+assert.match(N.renderMarkdown(chat,{exportSelection:selection}),/Generated illustration/);
+assert(!N.renderMarkdown(chat,{exportSelection:selection}).includes('Reference.png'));
+assert.equal(E.attachments(chat,{...E.DEFAULTS,uploadedFiles:false,generatedFiles:false}).length,0);
+// Preserve the pre-existing complete Vault Markdown renderer exactly: omit only
+// the newly recognized tool-only synthetic records in the legacy renderer.
+const oldChat={...chat,messages:chat.messages.filter(m=>!m.selectionOnly)};
+const info={exportedAt:'2026-11-25T00:00:00Z',timeZone:'UTC'};
+assert.equal(N.renderMarkdown(chat,info),N.renderMarkdown(oldChat,info));
+console.log('PASS: explicit image-generation tool outputs, upload name, active branch, file-only rows, filtering and unchanged full Markdown');
