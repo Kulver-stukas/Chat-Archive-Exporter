@@ -15,7 +15,9 @@ with sync_playwright() as p:
  pg.evaluate("chrome.runtime.onMessage.fire({type:'CAE_UI_WIDGET_SHOW'},{id:'mock-extension'},()=>{})")
  pg.wait_for_function('!!window.testWidgetRoot')
  def click(id):pg.evaluate_handle('(id)=>testWidgetRoot.getElementById(id)',id).as_element().click()
- click('bubble');pg.wait_for_function("testWidgetRoot.getElementById('workspace').textContent==='Test workspace'")
+ assert pg.evaluate("!testWidgetRoot.getElementById('bubble') && !testWidgetRoot.getElementById('minimize') && !testWidgetRoot.getElementById('quick') && !testWidgetRoot.getElementById('verify') && !testWidgetRoot.getElementById('box').hidden")
+ assert pg.evaluate("[...testWidgetRoot.querySelectorAll('button')].every(b=>b.title.trim())")
+ pg.wait_for_function("testWidgetRoot.getElementById('workspace').textContent==='Test workspace'")
  assert pg.locator('#cae-inpage-button').is_hidden()
  before=pg.evaluate('__ui.binds')
  for _ in range(3):
@@ -26,14 +28,13 @@ with sync_playwright() as p:
  click('logsToggle');assert pg.evaluate("!testWidgetRoot.getElementById('long').hidden")
  assert pg.evaluate("(()=>{const box=testWidgetRoot.getElementById('box');return box.scrollHeight<=box.clientHeight+2})()"),'no outer widget scroll at 720px'
  assert pg.evaluate("!!testWidgetRoot.getElementById('manualLog').textContent")
- click('quick');pg.wait_for_function("__ui.calls.some(m=>m.type==='CAE_MANUAL_QUICK')")
  click('files');assert pg.evaluate("__ui.calls.some(m=>m.type==='CAE_UI_OPEN_PANEL'&&m.mode==='library')")
- click('settings');assert pg.evaluate("__ui.calls.some(m=>m.type==='CAE_UI_OPEN_SETTINGS')")
+ click('settings');assert pg.evaluate("__ui.calls.some(m=>m.type==='CAE_UI_OPEN_PANEL'&&m.mode==='settings') && !__ui.calls.some(m=>m.type==='CAE_UI_OPEN_SETTINGS'||m.type==='CAE_MANUAL_QUICK')")
  handle=pg.evaluate_handle("testWidgetRoot.getElementById('drag')").as_element();handle.focus();pg.keyboard.press('ArrowLeft')
  assert pg.locator('#cae-monitor-widget').evaluate('(e)=>e.style.left')
  pg.screenshot(path=str(qa/'widget-expanded.png'))
- click('minimize');pg.screenshot(path=str(qa/'widget-collapsed.png'))
- click('bubble');click('dismiss');assert pg.locator('#cae-monitor-widget').count()==0
+ click('logsToggle');assert pg.evaluate("testWidgetRoot.getElementById('long').hidden && !testWidgetRoot.getElementById('box').hidden")
+ click('dismiss');assert pg.locator('#cae-monitor-widget').count()==0
  assert pg.locator('#cae-inpage-button').is_hidden(),'Closing the widget must not restore the old floating MD button'
  pg.evaluate("chrome.storage.local.set({'cae.ui.preferences.v1':{widgetEnabled:true,theme:'dark'}})");pg.wait_for_function("!!document.getElementById('cae-monitor-widget')")
  assert pg.locator('#cae-monitor-widget').get_attribute('data-theme')=='dark'
@@ -44,6 +45,6 @@ with sync_playwright() as p:
  pg.evaluate("chrome.runtime.onMessage.fire({type:'CAE_UI_WIDGET_TOGGLE'},{id:'mock-extension'},()=>{})")
  pg.wait_for_function("!document.getElementById('cae-monitor-widget')")
  assert not errors,errors
- (qa/'widget-results.json').write_text(json.dumps({'passed':True,'scenarios':['opt-in','show/collapse/dismiss','workspace and progress','cached status only','quick command','open files/settings','keyboard reposition','theme'],'errors':errors},indent=2))
+ (qa/'widget-results.json').write_text(json.dumps({'passed':True,'scenarios':['opt-in','show monitor directly / dismiss','workspace and progress','cached status only','no export controls','open files/settings','keyboard reposition','theme'],'errors':errors},indent=2))
  print('PASS: optional widget, cached state, commands, permanent legacy button suppression, short/long logs, dismiss resets settings toggle, keyboard reposition and theme; no JS errors')
  b.close()

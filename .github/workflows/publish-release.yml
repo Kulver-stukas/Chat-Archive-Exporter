@@ -59,6 +59,7 @@ jobs:
               assert not any('/tests/' in name for name in names)
               print('Verified extension package:',len(names),'files')
           PYTEST
+          python3 tools/package_store.py "dist/chat-archive-exporter-$tag-webstore.zip"
           git archive --format=zip --prefix=chat-archive-exporter/ -o "dist/chat-archive-exporter-$tag-source.zip" HEAD
       - name: Publish GitHub Beta pre-release
         shell: bash
@@ -73,6 +74,7 @@ jobs:
             gh release create "$tag" \
               "dist/chat-archive-exporter-$tag.zip" \
               "dist/chat-archive-exporter-$tag-source.zip" \
+              "dist/chat-archive-exporter-$tag-webstore.zip" \
               --target "$GITHUB_SHA" \
               --title "Chat Archive Exporter $tag" \
               --notes-file "release-notes/$tag.md" \

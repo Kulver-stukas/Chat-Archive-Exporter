@@ -145,7 +145,7 @@
         const section=['settings','activity','tools'].includes(message.section)?message.section:'settings';
         work=openExtensionSettings(sender.tab.id,section);
       }else if(message.type==='CAE_UI_OPEN_PANEL'&&fromPage){
-        const mode=['all','library','monitor'].includes(message.mode)?message.mode:'all',windowId=sender.tab.windowId;
+        const mode=['all','library','monitor','settings'].includes(message.mode)?message.mode:'all',windowId=sender.tab.windowId;
         // Opening remains directly tied to the user's click; no async provider call.
         const saving=chrome.storage.session.set({['cae.ui.intent.'+windowId]:{mode,at:Date.now(),nonce:crypto.randomUUID()}});
         const opening=chrome.sidePanel.open({windowId});

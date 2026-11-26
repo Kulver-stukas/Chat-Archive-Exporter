@@ -1,6 +1,21 @@
-## v0.1.9 Beta 1 (2026-11-25)
+## v0.1.9 Beta 2 (2026-11-26)
 
-- Publish the verified rev.3 test build with the v0.1.8 technical fixes and v0.1.9 selective export. No additional runtime changes for this pre-release. See `release-notes/v0.1.9-beta.1.md`.
+- Promote tested rev.5 (including rev.4 navigation, loading and layout improvements) to the public beta release.
+- Add privacy disclosures, distribution notes and a separate Chrome Web Store package builder. No changes to archival logic or permission scope.
+- Label the manifest as BETA; numerical version remains 0.1.9 for the first store submission.
+
+## v0.1.9 rev.5 — Monitor and compact controls
+
+- Remove minimized widget and quick export/refresh controls; retain optional logs, move Settings navigation to Side Panel.
+- Add native button tooltips and reduce repetitive explanatory paragraphs; retain operational status, diagnostics and essential prerequisites.
+- Add Files shortcut in the current-chat selector, respecting file-category filters.
+- Preserve rev.4 navigation, full-height layout and all archival core files.
+
+## v0.1.9 rev.4 — Message selector navigation and layout
+
+- Show indeterminate progress while loading the conversation.
+- Debounced refresh of open message selector after verified same-workspace navigation; discard stale replies and preserve workspace boundaries.
+- Use remaining panel height for the list and retain accessible export actions.
 
 ## v0.1.9 rev.3 (2026-11-25) — Image originals and selector polish
 

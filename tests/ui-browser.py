@@ -113,6 +113,13 @@ with sync_playwright() as p:
    assert len(pa.evaluate('__ui.opens'))==before,'Settings must not open new tabs'
    pa.locator('#modeLibrary').click()
   check('Side Panel Settings/Tools stay local; Back restores list',local_tools)
+  def widget_settings():
+   before=len(pa.evaluate('__ui.opens'))
+   pa.evaluate("chrome.storage.session.set({'cae.ui.intent.1':{mode:'settings',at:Date.now(),nonce:'widget-settings-test'}})")
+   pa.wait_for_function("!document.querySelector('#vaultSettings').classList.contains('hidden')")
+   assert len(pa.evaluate('__ui.opens'))==before
+   pa.locator('#modeLibrary').click()
+  check('Widget Settings intent routes to local Side Panel settings',widget_settings)
 
   def accepting():
    pa.evaluate('__ui.reject=true');pa.locator('#libraryArchive').click()

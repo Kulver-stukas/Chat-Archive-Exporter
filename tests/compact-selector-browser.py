@@ -26,6 +26,7 @@ fixture = (root / 'tests/ui-fixtures.js').read_text() + r'''
  // must announce a ZIP while the corresponding reference is selected.
  const imageReply=messages.find(m=>m.id==='a2');
  imageReply.textContent='';imageReply.attachments=[{key:'file:file_generated',fileId:'file_generated',name:'Generated illustration',origin:'generated',mediaClass:'image',messageId:'a2'}];
+ messages.find(m=>m.id==='q3').attachments=[{key:'file:file_uploaded',fileId:'file_uploaded',name:'Uploaded original.jpg',origin:'uploaded',mediaClass:'image',messageId:'q3'}];
  t.testChat={id:t.scope.currentId,title:'Long conversation test',branchNode:'a100',messages};
  const connect=chrome.tabs.connect;
  chrome.tabs.connect=(...args)=>{
@@ -83,12 +84,24 @@ with sync_playwright() as p:
             page.locator('#exportThinking').uncheck()
             page.wait_for_function("!document.querySelector('#exportThinking').checked")
             assert rows.nth(1).locator('.message-snippet').inner_text().startswith('Answer 1:')
+            page.locator('#exportUploaded').uncheck()
             page.locator('#exportGenerated').uncheck()
             page.wait_for_function("!document.querySelector('#exportGenerated').checked && document.querySelector('#downloadMessages').textContent==='Download selection as .md'")
             assert rows.nth(3).locator('.message-checkbox').is_disabled()
+            assert page.locator('[data-message-selection="files"]').is_disabled()
             page.locator('#exportGenerated').check()
             page.wait_for_function("document.querySelector('#exportGenerated').checked && document.querySelector('#downloadMessages').textContent==='Download selection as .zip'")
             page.keyboard.press('Escape')
+            page.locator('[data-message-selection="files"]').click()
+            assert page.locator('.message-checkbox:checked').count()==1
+            assert page.locator('.message-row:has(.message-checkbox:checked)').get_attribute('data-row-id')=='t2'
+            page.locator('#exportMenuToggle').click();page.locator('#exportUploaded').check();page.keyboard.press('Escape')
+            page.wait_for_function("document.querySelector('#exportUploaded').checked")
+            page.locator('[data-message-selection="files"]').click()
+            assert page.locator('.message-checkbox:checked').count()==2
+            assert '2 files' in page.locator('#messageSelectedCount').inner_text()
+            assert page.locator('#downloadMessages').inner_text()=='Download selection as .zip'
+            assert page.evaluate("[...document.querySelectorAll('button')].every(b=>b.title.trim())")
             page.locator('[data-message-selection="answer"]').click()
             assert page.locator('.message-checkbox:checked').count()==100
             page.locator('[data-message-selection="none"]').click()

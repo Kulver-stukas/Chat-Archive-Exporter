@@ -1,6 +1,20 @@
-# Chat Archive Exporter v0.1.9 Beta 1
+# Chat Archive Exporter — v0.1.9 Beta 2
 
-GitHub pre-release based on v0.1.9 rev.3. Includes v0.1.8 archive maintenance and v0.1.9 selective current-chat export. See `release-notes/v0.1.9-beta.1.md` for the consolidated release notes and `TODO_v0.1.9.md` for remaining work.
+Current public beta is based on the tested v0.1.9 rev.5. It is a functional local archiving tool, not a technology demonstrator. ChatGPT is the only supported provider. This independent project is not affiliated with or endorsed by OpenAI. It uses the signed-in ChatGPT web session and unofficial, changeable web endpoints. Users must ensure their use is permitted by applicable service terms and workspace policies; OpenAI's individual Terms of Use restrict automated or programmatic extraction. The official account data export remains an alternative.
+
+See [Privacy Policy](PRIVACY.md), [Beta 2 release notes](release-notes/v0.1.9-beta.2.md), and [known limitations and future work](TODO_v0.1.9.md). Download the ordinary GitHub install ZIP for unpacked installation. The separately named Chrome Web Store ZIP has its manifest at the archive root. A store listing, if approved, will be a separate installation with its own extension identity and local storage.
+
+The release is based on 71 passing Node regression suites and prior Chromium fixture checks; live browser behavior and API availability can vary. Do not assume every conversation, file, or native Space object is retrievable.
+
+---
+
+# Chat Archive Exporter v0.1.9 rev.5 — Monitor and compact controls
+
+The widget now opens directly as a monitor; there is no minimized icon or Refresh/Download action. Short status and expanded logs remain. Chats, Files and Settings open the corresponding Side Panel view. Tooltips replace redundant explanatory paragraphs across Popup, Side Panel and persistent settings. The Select messages shortcut **Files** selects eligible message rows containing enabled uploaded/generated file references; it does not toggle export categories or select individual attachments. See RELEASE_NOTES_v0.1.9-rev5.md and TEST_REPORT_v0.1.9-rev5.md.
+
+# Chat Archive Exporter v0.1.9 rev.4 — Message selector navigation and layout
+
+Minor UI revision of Beta 1: indeterminate loading progress, same-workspace automatic selector refresh after navigation, and a full-height message list. See RELEASE_NOTES_v0.1.9-rev4.md and TEST_REPORT_v0.1.9-rev4.md. The API, export engine and Vault are unchanged.
 
 # Chat Archive Exporter v0.1.9 rev.3 — Image originals and selector polish
 

@@ -22,6 +22,9 @@
   const cleanExportPrefs=raw=>E?.preferences?E.preferences(raw):Object.fromEntries(Object.keys(exportDefaults).map(k=>[k,raw?.[k]!==false]));
   let exportPrefs=cleanExportPrefs(),exportPrefsReady=false,exportPrefsPending=0,exportPrefsPromise=null,exportStoredRevision=-1;
   let messageSelection=null,messageSelectorOpen=false,messageSelectionLoading=false,messageLoadGeneration=0,messageLoadBinding=null;
+  // Selection follows navigation only within the workspace in which the user opened it.
+  const MESSAGE_FOLLOW_DELAY_MS=300;
+  let messageAutoAccount=null,messageAutoPending=false,messageAutoTimer=null,contextGeneration=0;
   let uiView=SURFACE==='options'?'settings':'export',prefs=U.preferences(),previousView='export';
   let uiWindowId=null,libraryCollapsed=new Set(),libraryVisible=[],uiIntent=null;
   const sourceTabId=Number(new URLSearchParams(location.search).get('tab'))||null;
@@ -88,9 +91,10 @@
     const summary=state.library?.summary;
     $('inventoryBrief').textContent=state.libraryJob?.job?.active?U.humanStatus(state.libraryJob.job)+': '+(state.libraryJob.job.detail||''):
       summary?`${summary.total||0} files in saved inventory. ${summary.selectable??0} originals requestable.`:'No saved inventory. Choose a Vault before starting.';
-    $('catalogStamp').textContent=state.library?.captured_at?'Saved catalog: '+new Date(state.library.captured_at).toLocaleString()+'. No scan on download.':'No saved catalog for this workspace.';
+    $('catalogStamp').textContent=state.library?.captured_at?'Saved catalog: '+new Date(state.library.captured_at).toLocaleString():'No saved catalog for this workspace.';
     $('panelCloseHint').textContent=$('keepPanelOpen').checked||!prefs.autoClosePanel?'Panel stays open for monitoring.':
       typeof chrome.sidePanel?.close==='function'?'Closes after export is accepted.':'Auto-close is unavailable in this Chrome version.';
+    $('keepPanelOpen').title=$('panelCloseHint').textContent;
   }
   async function savePreferences(){
     prefs=U.preferences({theme:$('themeSelect').value,autoClosePanel:$('autoClosePanel').checked,
@@ -119,8 +123,32 @@
     if(open&&focus)$('exportAll').focus();
   }
   function selectorActive(){return SURFACE==='panel'&&!exportPrefs.completeConversation&&messageSelectorOpen;}
-  function messageStatus(text=''){
+  function messageStatus(text='',loading=false){
     const node=$('messageSelectionStatus');node.textContent=text;node.classList.toggle('hidden',!text);
+    $('messageLoadProgress').classList.toggle('hidden',!loading);
+    $('messageRows').setAttribute('aria-busy',String(loading));
+  }
+  function selectorVisible(){return selectorActive()&&uiView==='export'&&state.mode==='current';}
+  function clearMessageAutoTimer(){clearTimeout(messageAutoTimer);messageAutoTimer=null;}
+  function maybeAutoLoadMessages(){
+    if(!messageAutoPending||!messageAutoAccount||state.currentContextPending||state.connecting)return;
+    if(!state.scope?.observed){if(selectorActive())messageStatus(state.scope?'Workspace not verified. Click Refresh when connected.':'Open a ChatGPT conversation to continue.');return;}
+    if(state.scope.accountId!==messageAutoAccount){
+      clearMessageAutoTimer();messageAutoPending=false;messageAutoAccount=null;
+      if(selectorActive())messageStatus('Workspace changed. Click Refresh to select messages here.');
+      return;
+    }
+    const binding=selectionBinding();
+    if(!binding){if(selectorActive())messageStatus('Open a ChatGPT conversation to continue.');return;}
+    if(!selectorVisible()||state.busy||messageSelectionLoading||!exportPrefsReady||exportPrefsPending||!state.port)return;
+    if(messageAutoTimer!==null)return;
+    messageAutoTimer=setTimeout(()=>{
+      messageAutoTimer=null;
+      if(!messageAutoPending||!selectorVisible()||state.busy||state.connecting||state.currentContextPending||!state.port||
+        !exportPrefsReady||exportPrefsPending||!sameSelectionBinding(binding)||binding.accountId!==messageAutoAccount)return;
+      messageAutoPending=false;
+      loadMessageSelection(binding,{verified:true}).catch(fail);
+    },MESSAGE_FOLLOW_DELAY_MS);
   }
   function setDownloadLabels(selectedFiles=null){
     const main=$('exportCurrent'),menu=$('exportMenuToggle');
@@ -133,7 +161,7 @@
     main.title=selectorActive()?'Use Download selection below; Refresh reloads the current conversation.':
       !exportPrefs.completeConversation?'Open the message selector. '+summary:
       'Download the complete conversation. '+summary+'. '+(withFiles?'ZIP if original files are included; otherwise .md.':'Markdown (.md).');
-    menu.title='Export content settings: '+summary;
+    menu.title='Export content settings: '+summary+'. Saved for all tabs.';
     if(selectedFiles!==null){
       $('downloadMessages').textContent=selectedFiles>0?'Download selection as .zip':'Download selection as .md';
       $('downloadMessages').title=selectedFiles>0?`${selectedFiles} file reference(s) selected. ZIP includes Markdown, obtainable originals and a report.`:
@@ -149,6 +177,10 @@
     $('exportContentSummary').textContent=(count===EXPORT_FIELDS.length?'All content':count?EXPORT_FIELDS.filter(k=>exportPrefs[k]).map(k=>labels[k]).join(', '):'No content selected')+
       (exportPrefs.completeConversation?' · Complete conversation':' · Choose messages in the side panel');
     $('messageSelector').classList.toggle('hidden',!selectorActive());
+    if(exportPrefs.completeConversation){
+      clearMessageAutoTimer();messageAutoPending=false;
+      if(messageSelectionLoading)invalidateMessageSelection('');
+    }
     setDownloadLabels();
     if(messageSelection)renderMessageSelection();
     refreshButtons();
@@ -176,15 +208,17 @@
       exportPrefsReady=false;await ensureExportPreferences().catch(()=>{});throw error;
     }finally{exportPrefsPending--;refreshButtons();}
   }
-  function selectionBinding(){return state.scope?.observed&&state.scope.currentId&&state.tab?.id?
+  function selectionBinding(){return state.scope?.observed&&state.scope.accountId&&state.scope.currentId&&state.tab?.id?
     {accountId:state.scope.accountId,conversationId:state.scope.currentId,tabId:state.tab.id}:null;}
   function sameSelectionBinding(a,b=selectionBinding()){
     return !!a&&!!b&&a.accountId===b.accountId&&a.conversationId===b.conversationId&&a.tabId===b.tabId;
   }
-  function invalidateMessageSelection(message='Conversation changed. Click Refresh to load messages.'){
+  function invalidateMessageSelection(message='Conversation changed. Click Refresh to load messages.',follow=false){
+    clearMessageAutoTimer();
+    messageAutoPending=!!(follow&&messageAutoAccount&&selectorActive());
     messageLoadGeneration++;messageSelectionLoading=false;messageSelection=null;messageLoadBinding=null;
     $('messageRows').replaceChildren();$('messageSelectedCount').textContent='0 selected';
-    messageStatus(message);$('downloadMessages').disabled=true;setDownloadLabels(null);
+    messageStatus(!messageAutoPending&&message==='Checking active conversation…'?'Conversation changed. Click Refresh to load messages.':message,messageAutoPending&&selectorVisible());$('downloadMessages').disabled=true;setDownloadLabels(null);
     $('downloadMessages').textContent='Download selection';
   }
   function selectionRows(){return messageSelection&&E?E.rows(messageSelection.chat,{...exportPrefs,completeConversation:true}):[];}
@@ -205,6 +239,7 @@
   }
   function renderMessageSelection(){
     if(!messageSelection)return;
+    const rendered=messageSelection;
     const list=$('messageRows');list.replaceChildren();
     const rows=selectionRows();
     const messagesById=new Map(messageSelection.chat.messages.map(m=>[m.id,m]));
@@ -212,12 +247,12 @@
       const wrapper=document.createElement('div');wrapper.className='message-row';wrapper.dataset.eligible=String(row.eligible);wrapper.dataset.rowId=row.id;wrapper.dataset.role=row.role;
       const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.className='message-checkbox';
       checkbox.checked=row.eligible&&messageSelection.selected.has(row.id);checkbox.disabled=!row.eligible;
-      checkbox.setAttribute('aria-label',`Select ${row.role==='question'?'question':'answer'}: ${String(row.preview||'Attachment').slice(0,160)}`);
-      checkbox.addEventListener('change',()=>{checkbox.checked?messageSelection.selected.add(row.id):messageSelection.selected.delete(row.id);refreshMessageSelectionCount();});
+      checkbox.setAttribute('aria-label',`Select ${row.role==='question'?'question':'answer'}: ${String(row.preview||'Attachment').slice(0,160)}`);checkbox.title=row.eligible?'Include this message according to the export content settings.':'Excluded by content settings.';
+      checkbox.addEventListener('change',()=>{if(messageSelection!==rendered)return;checkbox.checked?messageSelection.selected.add(row.id):messageSelection.selected.delete(row.id);refreshMessageSelectionCount();});
       const detail=document.createElement('details');detail.className='message-copy';detail.open=messageSelection.expanded.has(row.id);
-      detail.addEventListener('toggle',()=>{if(!messageSelection)return;detail.open?messageSelection.expanded.add(row.id):messageSelection.expanded.delete(row.id);if(detail.open)fillPreview();});
+      detail.addEventListener('toggle',()=>{if(messageSelection!==rendered)return;detail.open?messageSelection.expanded.add(row.id):messageSelection.expanded.delete(row.id);if(detail.open)fillPreview();});
       const summary=document.createElement('summary');
-      summary.setAttribute('aria-label',`Preview ${row.role}: ${row.preview}`);
+      summary.setAttribute('aria-label',`Preview ${row.role}: ${row.preview}`);summary.title='Expand or collapse the message preview.';
       const snippet=document.createElement('span');snippet.className='message-snippet';snippet.textContent=String(row.preview||'Attachment without text').slice(0,280);
       const meta=document.createElement('span');meta.className='message-meta';meta.textContent=[row.hasThinking?'Thinking available':'',row.attachmentCount?row.attachmentCount+' file references':'',!row.eligible?'Excluded by content settings':''].filter(Boolean).join(' · ');
       snippet.title=String(row.preview||'');
@@ -233,31 +268,38 @@
         const hasBody=messages.some(m=>m.role===(row.role==='question'?'user':'assistant')&&E.textOf(m).trim());
         preview.textContent=[text,...(hasBody?names.map(name=>'File: '+name):[])].join('\n\n');
       };
+      summary.addEventListener('click',()=>{if(!detail.open)fillPreview();});
       if(detail.open)fillPreview();
       detail.append(preview);if(meta.textContent)detail.append(meta);wrapper.append(checkbox,detail);list.append(wrapper);
     }
     if(!rows.length){const empty=document.createElement('p');empty.className='empty-state';empty.textContent='No selectable messages were returned.';list.append(empty);}
     refreshMessageSelectionCount();
   }
-  async function loadMessageSelection(expected=null){
+  async function loadMessageSelection(expected=null,{verified=false}={}){
     if(SURFACE!=='panel')return;
+    clearMessageAutoTimer();messageAutoPending=false;
     const wanted=expected||selectionBinding();
+    // An intent from another surface is only trusted after its exact binding
+    // has been verified. Do not let a stale popup intent arm auto-follow.
+    if(wanted?.accountId&&!state.currentContextPending&&sameSelectionBinding(wanted))messageAutoAccount=wanted.accountId;
+    else if(!verified)messageAutoAccount=null;
     messageSelectorOpen=true;messageSelectionLoading=true;messageLoadBinding=wanted;
     const generation=++messageLoadGeneration;
-    $('messageSelector').classList.remove('hidden');messageStatus('Loading messages…');refreshButtons();
+    $('messageSelector').classList.remove('hidden');messageStatus('Loading messages…',true);refreshButtons();
     try{
       await ensureExportPreferences();
+      if(generation!==messageLoadGeneration)return;
       if(exportPrefs.completeConversation){$('messageSelector').classList.add('hidden');return;}
       if(!E)throw Error('Selection helper is unavailable. Reload the extension.');
-      await reconnect({force:true});
+      if(!verified)await reconnect({force:true});
       if(generation!==messageLoadGeneration)return;
       const binding=selectionBinding();
-      if(!binding||wanted&&!sameSelectionBinding(wanted,binding))throw Error('The active chat changed. Click Refresh in the intended chat.');
-      messageLoadBinding=binding;
+      if(state.currentContextPending||!binding||wanted&&!sameSelectionBinding(wanted,binding))throw Error('The active chat changed. Click Refresh in the intended chat.');
+      messageLoadBinding=binding;messageAutoAccount=binding.accountId;
       const item=state.chats.find(c=>c.id===binding.conversationId)||{id:binding.conversationId,title:state.tab?.title||'Current chat'};
       const chat=await call('CAE_GET_CHAT',{chat:item,expectedAccountId:binding.accountId});
       if(generation!==messageLoadGeneration)return;
-      if(!sameSelectionBinding(binding)||chat?.id!==binding.conversationId)throw Error('The active chat changed while messages were loading.');
+      if(state.currentContextPending||!sameSelectionBinding(binding)||chat?.id!==binding.conversationId)throw Error('The active chat changed while messages were loading.');
       if(!Array.isArray(chat.messages)||!chat.messages.length)throw Error('No readable messages were returned. Reload messages to try again.');
       const previous=messageSelection;
       const rows=E.rows(chat,{...exportPrefs,completeConversation:true});
@@ -269,7 +311,7 @@
       if(generation!==messageLoadGeneration)return;
       messageSelection=null;$('messageRows').replaceChildren();$('messageSelectedCount').textContent='0 selected';
       messageStatus(error?.message||String(error));fail(error);
-    }finally{if(generation===messageLoadGeneration){messageSelectionLoading=false;messageLoadBinding=null;refreshButtons();if(messageSelection)refreshMessageSelectionCount();}}
+    }finally{if(generation===messageLoadGeneration){messageSelectionLoading=false;messageLoadBinding=null;$('messageLoadProgress').classList.add('hidden');$('messageRows').setAttribute('aria-busy','false');refreshButtons();if(messageSelection)refreshMessageSelectionCount();}}
   }
   function selectMessageRows(action){
     if(!messageSelection||messageSelectionLoading)return;
@@ -278,7 +320,7 @@
     else if(action==='invert')for(const row of rows)messageSelection.selected.has(row.id)?messageSelection.selected.delete(row.id):messageSelection.selected.add(row.id);
     else{
       messageSelection.selected.clear();
-      for(const row of rows)if(action==='all'||row.role===action)messageSelection.selected.add(row.id);
+      for(const row of rows)if(action==='all'||(action==='files'?row.attachmentCount>0:row.role===action))messageSelection.selected.add(row.id);
     }
     renderMessageSelection();
   }
@@ -362,7 +404,8 @@
     if(!value)scheduleReconnect(150);
   }
   function refreshButtons(){
-    if(messageSelection&&!sameSelectionBinding(messageSelection))invalidateMessageSelection();
+    if(messageSelection&&!sameSelectionBinding(messageSelection))invalidateMessageSelection('Checking active conversation…',true);
+    document.body.classList.toggle('message-selector-active',selectorActive());
     // The top action opens the selector; once open, only its footer submits
     // a selective export. Keep the split menu active so categories can change.
     $('exportCurrent').disabled=selectorActive()||state.busy||state.currentContextPending||!state.port||!state.scope?.observed||!state.scope?.currentId||!exportPrefsReady||!!exportPrefsPending||messageSelectionLoading||!exportCategoriesSelected();
@@ -373,6 +416,7 @@
     $('exportAll').disabled=!exportPrefsReady||!!exportPrefsPending;
     for(const node of document.querySelectorAll('[data-export-field]'))node.disabled=!exportPrefsReady||!!exportPrefsPending;
     $('reloadMessages').disabled=messageSelectionLoading||state.busy||state.currentContextPending||!state.scope?.observed||!state.scope?.currentId;
+    for(const node of document.querySelectorAll('[data-message-selection]'))node.disabled=!messageSelection||messageSelectionLoading||state.currentContextPending||(node.dataset.messageSelection==='files'&&!selectionRows().some(r=>r.eligible&&r.attachmentCount>0));
     if(messageSelection)refreshMessageSelectionCount();else $('downloadMessages').disabled=true;
     $('exportSelected').disabled=state.busy||!state.port||!state.scope?.observed||!(state.selected.size||state.selectedProjects.size);
     $('snapshotSettings').disabled=state.busy||!state.port||!state.scope?.observed||!state.directory;
@@ -385,7 +429,7 @@
     const title=state.chats.find(c=>c.id===state.scope?.currentId)?.title||state.tab?.title?.replace(/\s*[-|]\s*ChatGPT$/i,'');
     $('currentTitle').textContent=state.scope?.currentId?(title||'Current conversation'):'Open a ChatGPT conversation';
     $('currentTitle').title=state.scope?.currentId||'';
-    refreshLibraryControls();uiRefresh();
+    refreshLibraryControls();uiRefresh();maybeAutoLoadMessages();
   }
   function applyModeView(name){
     document.body.dataset.uiView=uiView;document.body.dataset.mode=name;
@@ -410,6 +454,7 @@
       $('folderSection').classList.toggle('hidden',SURFACE!=='panel'||name!=='all');
     }
     $('folderControls').classList.remove('hidden');
+    if(!selectorVisible())clearMessageAutoTimer();else maybeAutoLoadMessages();
   }
   function mode(name){
     if(!['current','all','library'].includes(name))return;
@@ -438,11 +483,14 @@
     state.requests.clear();
   }
   async function connectActive(auto = false, force = false) {
+    const context=contextGeneration;
     const tab=sourceTabId?await chrome.tabs.get(sourceTabId).catch(()=>null):(await chrome.tabs.query({active:true,currentWindow:true}))[0];
+    if(context!==contextGeneration)return null;
     if (!tab || !CHAT_URL.test(tab.url || '')) {
       if (state.port) disconnect();
       state.tab = null;
-      state.scope = null;
+      state.scope = null;state.currentContextPending=false;
+      if(messageAutoPending)messageStatus('Open a ChatGPT conversation to continue.');
       $('scope').textContent = 'Open an active ChatGPT tab';
       refreshButtons();
       // Do not clear background status: it belongs to the last verified
@@ -454,8 +502,18 @@
     }
     // The same live port can be reused for ordinary tab-focus events. Refresh
     // CAE_STATUS when asked explicitly or after SPA URL changes.
-    if (state.port && state.scope && state.tab?.id === tab.id && !force && state.tab.url === tab.url)
+    if (state.port && state.scope && state.tab?.id === tab.id && !force && !state.currentContextPending && state.tab.url === tab.url)
       return state.scope;
+    // Focus can reveal a different active tab even before its navigation event.
+    if(state.tab&&(state.tab.id!==tab.id||state.tab.url!==tab.url)){
+      state.currentContextPending=true;
+      // A newly received popup intent may already target this tab. Let its
+      // own exact-binding check decide rather than cancelling it on connect.
+      const requested=messageSelectionLoading&&messageLoadBinding?.tabId===tab.id;
+      if(!requested&&(messageSelection||messageLoadBinding||messageAutoAccount&&selectorActive()))
+        invalidateMessageSelection('Checking active conversation…',true);
+      refreshButtons();
+    }
     disconnect();
     state.tab = tab;
     try { state.port = chrome.tabs.connect(tab.id, { name: 'CAE_API' }); }
@@ -503,7 +561,7 @@
       }
     });
     const scope = await call('CAE_STATUS', {force:force===true}, null, 12000);
-    if(state.port!==activePort)return null; // A tab change may invalidate an in-flight reply.
+    if(state.port!==activePort||context!==contextGeneration)return null; // A tab change may invalidate an in-flight reply.
     if (state.scope?.accountId && scope.accountId && state.scope.accountId !== scope.accountId) {
       state.chats = []; state.selected.clear();state.selectedProjects.clear(); state.listAccountId = null; state.listLoadedAt = 0; state.listSource = null;
       state.sync = null; state.syncLoaded = false; renderChats();
@@ -523,9 +581,11 @@
     // over the globally last-chosen folder when returning to that workspace.
     try {
       const bound = await ChatArchiveVault.restoreWorkspaceDirectory(scope.accountId);
+      if(context!==contextGeneration||state.port!==activePort)return null;
       state.directory=bound||null;
       await refreshVaultStatus();
     } catch (error) { log('WARNING: Workspace Vault status: ' + error.message); }
+    if(context!==contextGeneration||state.port!==activePort)return null;
     $('scope').textContent = `${scope.display} · ${scope.accountId ? scope.accountId.slice(0, 8) : 'account not identified'}`;
     refreshButtons();
     if(manualJob?.active)showManual(manualJob);else status('Connected.');
@@ -537,12 +597,13 @@
   }
   async function reconnect(options = {}) {
     if (state.connecting) return state.connecting;
-    const auto = !!options.auto;
+    const auto = !!options.auto,context=contextGeneration;
     if (auto && Date.now() < state.nextAutoAttempt) return state.scope;
     const p = connectActive(auto, !!options.force).then(scope => {
       state.autoFailures = 0; state.nextAutoAttempt = 0;
       return scope;
     }).catch(error => {
+      if(context!==contextGeneration)return null;
       if (auto) {
         state.nextAutoAttempt = Date.now() + Math.min(30000, 1500 * 2 ** Math.min(++state.autoFailures, 4));
         status('Connection pending; will retry on the next ChatGPT tab event.');
@@ -550,7 +611,12 @@
         return null;
       }
       throw error;
-    }).finally(() => { if (state.connecting === p) state.connecting = null; });
+    }).finally(() => {
+      if(state.connecting!==p)return;
+      state.connecting=null;
+      if(state.reverifyScope&&state.reconnectTimer===null)scheduleReconnect(150,true);
+      maybeAutoLoadMessages();
+    });
     state.connecting = p;
     return p;
   }
@@ -560,6 +626,7 @@
     clearTimeout(state.reconnectTimer);
     state.reconnectTimer = setTimeout(() => {
       state.reconnectTimer = null;
+      if(state.connecting)return; // Its finally handler consumes a queued forced recheck.
       const reverify=state.reverifyScope;state.reverifyScope=false;
       reconnect({auto:true,force:reverify}).catch(() => {});
     }, delay);
@@ -1152,18 +1219,24 @@
   chrome.tabs.onActivated?.addListener(info=>{
     const ownWindow=state.tab?.windowId??uiWindowId;
     if(sourceTabId||Number.isInteger(info?.windowId)&&Number.isInteger(ownWindow)&&info.windowId!==ownWindow)return;
-    state.currentContextPending=true;
+    if(info?.tabId===state.tab?.id&&!state.currentContextPending)return;
+    contextGeneration++;state.currentContextPending=true;
     const bound=messageSelection||messageLoadBinding;
-    if(bound&&Number.isInteger(info?.tabId)&&info.tabId!==bound.tabId){invalidateMessageSelection();refreshButtons();}
+    if(Number.isInteger(info?.tabId)&&(bound?info.tabId!==bound.tabId:messageAutoAccount&&selectorActive()))invalidateMessageSelection('Checking active conversation…',true);
+    else clearMessageAutoTimer();
     refreshButtons();state.nextAutoAttempt=0;state.autoFailures=0;scheduleReconnect(250,true);
   });
   chrome.tabs.onUpdated?.addListener((tabId,change,tab)=>{
     const ownWindow=state.tab?.windowId??uiWindowId;
     if(sourceTabId&&tabId!==sourceTabId||Number.isInteger(tab?.windowId)&&Number.isInteger(ownWindow)&&tab.windowId!==ownWindow)return;
     const bound=messageSelection||messageLoadBinding;
-    if(change.url&&bound&&tabId===bound.tabId){invalidateMessageSelection();refreshButtons();}
     if (tab?.active&&(change.url||change.status==='complete')) {
-      state.currentContextPending=true;refreshButtons();
+      // The URL change already caused a recheck. Do not interrupt a verified
+      // selector read on a redundant document-load completion event.
+      if(!change.url&&bound&&tabId===state.tab?.id&&state.port&&!state.currentContextPending)return;
+      contextGeneration++;state.currentContextPending=true;clearMessageAutoTimer();
+      if(change.url&&(bound||messageAutoAccount&&selectorActive()))invalidateMessageSelection('Checking active conversation…',true);
+      refreshButtons();
       state.nextAutoAttempt=0;state.autoFailures=0;scheduleReconnect(350,true);
     }
   });
@@ -1182,7 +1255,7 @@
   }
   function consumeIntent(intent){
     if(!intent||uiIntent===intent.nonce)return;uiIntent=intent.nonce;
-    if(intent.mode==='monitor')route('activity');else if(['all','current','library'].includes(intent.mode)){mode(intent.mode);if(intent.mode==='all'&&intent.refresh)ensureListLoaded(true).catch(fail);}
+    if(intent.mode==='settings')route('settings');else if(intent.mode==='monitor')route('activity');else if(['all','current','library'].includes(intent.mode)){mode(intent.mode);if(intent.mode==='all'&&intent.refresh)ensureListLoaded(true).catch(fail);}
     if(intent.mode==='current'&&intent.selectMessages===true){
       // A stale intent must never select messages from whichever tab happened
       // to become active later. Scope and conversation are checked after load.

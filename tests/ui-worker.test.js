@@ -1,8 +1,8 @@
 'use strict';
 const assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 const event=()=>({f:[],addListener(fn){this.f.push(fn)},fire(...args){this.f.forEach(fn=>fn(...args))}});
-let manual=null,library=[],background={workspaces:{}},icons=[],badges=[],colors=[],titles=[],opens=[],remote=0,widgetMessages=[];
-const chrome={runtime:{id:'ext',onMessage:event(),getURL:p=>'chrome-extension://ext/'+p},storage:{onChanged:event(),local:{get:async()=>({'cae.background.v1':background})},session:{set:async x=>opens.push('intent')}},
+let lastIntent=null,manual=null,library=[],background={workspaces:{}},icons=[],badges=[],colors=[],titles=[],opens=[],remote=0,widgetMessages=[];
+const chrome={runtime:{id:'ext',onMessage:event(),getURL:p=>'chrome-extension://ext/'+p},storage:{onChanged:event(),local:{get:async()=>({'cae.background.v1':background})},session:{set:async x=>{opens.push('intent');lastIntent=x;}}},
  tabs:{get:async id=>({id,windowId:1,url:'https://chatgpt.com/c/aaaaaaaa-1111-2222-3333-444444444444'}),onUpdated:event(),onRemoved:event(),
   sendMessage:async (id,m)=>{widgetMessages.push(m.type);return {shown:m.type==='CAE_UI_WIDGET_SHOW'}},query:async()=>[],create:async()=>{}},
  scripting:{executeScript:async()=>{}},windows:{update:async()=>{}},
@@ -44,6 +44,7 @@ const send=(m,sender)=>new Promise(resolve=>{const ret=chrome.runtime.onMessage.
  assert.equal(stored.items[0].title,'Stored in Vault');assert.equal(stored.source,'Vault mirror');
  assert.equal(await send({type:'CAE_UI_CHAT_CACHE',accountId:'workspace',display:'Workspace'},sender),null,'page cannot access arbitrary workspace cache');
  await send({type:'CAE_UI_OPEN_PANEL',mode:'library'},sender);assert.deepEqual(opens,['intent','open']);
+ await send({type:'CAE_UI_OPEN_PANEL',mode:'settings'},sender);assert.equal(lastIntent['cae.ui.intent.1'].mode,'settings');assert.deepEqual(opens,['intent','open','intent','open']);
  await send({type:'CAE_UI_TOGGLE_WIDGET',tabId:11},{id:'ext'});assert(widgetMessages.includes('CAE_UI_WIDGET_TOGGLE'));
  chrome.tabs.onUpdated.fire(11,{url:'https://chatgpt.com/'});assert.equal((await send({type:'CAE_UI_WIDGET_STATUS'},sender)).result.verified,true,'after a binding reset, STATUS alone restores it');assert.equal(remote,3);
  console.log('PASS: UI worker rebinds after worker/cache loss, native REC/IDLE badges, canceled Save neutrality, scoped sanitized monitor status, widget toggle, no core writes');

@@ -158,10 +158,12 @@ with sync_playwright() as p:
 
         panel.evaluate('finishUIManual()')
         panel.locator('#modeCurrent').click()
-        panel.evaluate("__ui.scope.currentId='bbbbbbbb-1111-2222-3333-444444444444'; chrome.tabs.onUpdated.fire(11,{url:'https://chatgpt.com/c/'+__ui.scope.currentId},{active:true})")
+        panel.evaluate("__ui.scope.currentId='bbbbbbbb-1111-2222-3333-444444444444'; __ui.testChat.id=__ui.scope.currentId; __ui.testChat.messages[0].textContent='New chat question'; chrome.tabs.onUpdated.fire(11,{url:'https://chatgpt.com/c/'+__ui.scope.currentId},{active:true})")
         panel.wait_for_function("document.querySelectorAll('.message-checkbox').length===0")
         assert panel.locator('#downloadMessages').is_disabled()
-        record('SPA chat change invalidates concrete selection')
+        panel.wait_for_function("document.querySelector('.message-snippet')?.textContent==='New chat question'")
+        assert panel.locator('#downloadMessages').is_enabled()
+        record('SPA chat change invalidates concrete selection and automatically reloads the same workspace')
 
         dark, dark_errors = page('panel', 320, True)
         assert dark.locator('#exportUploaded').is_checked() and not dark.locator('#exportQuestions').is_checked()
