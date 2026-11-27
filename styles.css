@@ -49,3 +49,5 @@ body.panel{height:100vh;display:flex;flex-direction:column;overflow:hidden}.pane
 
 /* Semantic action states, shared by popup, side panel and settings tab. */
 button.required-action:not(:disabled){background:#a65300;border-color:#a65300;color:white;font-weight:600}button.required-action:hover:not(:disabled){background:#854200;border-color:#854200}button.danger-action:not(:disabled){background:#982d32;border-color:#982d32;color:white;font-weight:600}button.danger-action:hover:not(:disabled){background:#79242a}button.primary:disabled,button.required-action:disabled,button.danger-action:disabled{background:var(--card);border-color:var(--border);color:var(--muted);opacity:.65}#restoreHint{color:var(--text);border-left:3px solid #a65300;padding-left:8px}
+
+#accessDiagnosticsText{width:100%;max-width:100%;box-sizing:border-box;resize:vertical;font-family:monospace;font-size:11px}

@@ -71,6 +71,10 @@
     let vault='Not connected',vaultPermission='no_handle';
     let vaultError=null;
     try{
+      // Reuse the writer's failure observation instead of querying another handle on every widget poll.
+      if(sync?.enabled&&sync.access?.checkedAt&&sync.access.worker==='error'){
+        vaultPermission='error';vault=String(sync.vaultName||'Vault')+' - Permission check failed';vaultError=sync.access.workerErrorName||sync.access.errorName||'PermissionError';
+      }else{
       const dir=await bounded('Vault handle lookup',()=>root.ChatArchiveVault.restoreWorkspaceDirectory(b.accountId));
       if(dir){
         const p=await bounded('Vault permission check',()=>root.ChatArchiveVault.permissionState(dir));vaultPermission=p.state;
@@ -78,6 +82,7 @@
         const label={granted:'Connected',prompt:bgGranted?'Background connected (confirm here)':'Confirmation required',denied:'Access denied',error:'Permission check failed',unsupported:'Permission check unsupported'};
         vault=String(dir.name||'Vault')+' - '+(label[p.state]||'Access unknown');
         if(p.state==='error')vaultError=p.errorName||'PermissionError';
+      }
       }
     }catch(e){vault='Access status unavailable';vaultPermission='unknown';vaultError=e.code||'UNAVAILABLE';}
     const warning=vaultError?'Vault access check: '+vaultError:!known.every(Boolean)?'One or more controller statuses unavailable.':'';

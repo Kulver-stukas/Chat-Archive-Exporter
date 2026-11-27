@@ -68,6 +68,12 @@
     try{await chrome.sidePanel.close({windowId:uiWindowId??state.tab?.windowId});}
     catch(e){uiView='activity';applyModeView(state.mode);status('Accepted. You can close the panel; the job continues.');}
   }
+  function vaultRepairNeeded(){
+    const bad=['error','unsupported','denied','no_handle'];
+    return bad.includes(state.vaultPermission)||state.vaultPermission==='prompt'||!!state.sync?.enabled&&bad.includes(state.sync?.access?.worker);
+  }
+  function vaultBindingActive(){return !!(manualJob?.active||state.sync?.enabled||state.libraryJob?.enabled||state.libraryJob?.job?.active);}
+  function canReselectVault(){return vaultBindingActive()?!!state.directory&&!!state.scope?.observed&&!state.currentContextPending&&vaultRepairNeeded():!state.busy;}
   function uiRefresh(){
     const account=libraryAccount();const j=manualJob?.accountId===account?manualJob:null;
     const a=U.activity(j,state.libraryJob,state.sync);
@@ -82,18 +88,19 @@
       error:'permission check unavailable',unknown:'checking access'};
     const selected=state.directory||state.vaultCandidate,verified=!!state.scope?.observed&&!state.currentContextPending;
     $('vaultBadge').textContent=selected?'Vault: '+selected.name+' - '+(!verified?'verify workspace first':state.directory?permission[state.vaultPermission]||'checking access':'connect to this workspace'):'Vault not selected';
-    $('headerReconnect').classList.toggle('hidden',!selected||verified&&!!state.directory&&state.vaultPermission==='granted');
+    $('headerReconnect').classList.toggle('hidden',!selected||verified&&!!state.directory&&state.vaultPermission==='granted'&&!vaultRepairNeeded());
     $('headerReconnect').textContent=state.directory?'Reconnect Vault':'Connect Vault';
     $('headerReconnect').disabled=!verified;
     $('reconnect').classList.toggle('required-action',!verified);
     $('toolsReconnectVault').classList.toggle('required-action',state.vaultPermission!=='granted');
-    $('pickFolder').classList.toggle('required-action',!state.directory);
+    $('pickFolder').classList.toggle('required-action',!state.directory||vaultRepairNeeded());
     $('headerReconnect').title=verified?'Connect or restore this selected Vault.':'Reconnect ChatGPT first; the workspace must be verified.';
     $('quickVault').disabled=state.busy||state.currentContextPending||!state.port||!state.scope?.observed||!state.scope.currentId||!state.directory;
     $('showWidget').disabled=!state.scope?.observed||!state.tab;
     $('showWidget').textContent='Show / hide widget on this tab';
     $('toolsReconnectVault').disabled=!selected||!verified;
-    $('pickFolder').disabled=!!manualJob?.active||!!state.sync?.enabled||!!state.libraryJob?.enabled||!!state.libraryJob?.job?.active;
+    $('pickFolder').disabled=!canReselectVault();
+    $('pickFolder').textContent=state.directory&&vaultBindingActive()&&vaultRepairNeeded()?'Reselect original Vault…':state.directory?'Change Vault…':'Choose Vault…';
     const summary=state.library?.summary;
     $('inventoryBrief').textContent=state.libraryJob?.job?.active?U.humanStatus(state.libraryJob.job)+': '+(state.libraryJob.job.detail||''):
       summary?`${summary.total||0} files in saved inventory. ${summary.selectable??0} originals requestable.`:'No saved inventory. Choose a Vault before starting.';
@@ -804,8 +811,8 @@
     const pending=pendingRestore();
     $('libraryMonitor').disabled=active||!verified||!(pending?restored.saved.hasInventory:j?.baseline_at);
     if(!pending)$('libraryMonitor').checked=!!j?.enabled;
-    $('libraryPickVault').disabled=active||!!j?.enabled||!!state.sync?.enabled||state.busy;
-    $('libraryGrantVault').classList.toggle('hidden',!state.directory||state.vaultPermission==='granted');
+    $('libraryPickVault').disabled=!canReselectVault();
+    $('libraryGrantVault').classList.toggle('hidden',!state.directory||state.vaultPermission==='granted'&&!vaultRepairNeeded());
     $('libraryVaultName').textContent=state.directory?`Vault: ${state.directory.name} (${state.vaultPermission})`:'Choose a Vault before starting.';
     $('libraryArchive').disabled=!verified||active||state.librarySubmitting||!j?.baseline_at||!state.librarySelected.size;
     $('librarySelectAll').disabled=active||!state.library;
@@ -892,7 +899,7 @@
         });
       }
       lifecyclePort.postMessage({type:'bind',accountId:state.scope.accountId,permission,
-        userActivation:navigator.userActivation?.isActive===true});
+        errorName:state.vaultErrorName||null,userActivation:navigator.userActivation?.isActive===true});
     }catch(_){lifecyclePort=null;}
   }
   async function retainGrantedVault(force=false) {
@@ -919,7 +926,7 @@
     const dir=state.directory,account=state.scope?.accountId;
     const operation=(async()=>{
       const button=$('authorizeVault'),picker=$('pickFolder');
-      picker.disabled=state.busy||!!state.sync?.enabled;
+      picker.disabled=!canReselectVault();
       if(!dir){
         picker.textContent='Choose Vault\u2026';
         $('folderStatus').textContent=state.vaultCandidate?'A saved Vault is available. Connect it to the verified workspace.':'No directory handle selected. Choose the existing Vault to reconnect it.';
@@ -942,9 +949,9 @@
       };
       $('folderStatus').textContent=`Vault: ${dir.name} \u00b7 ${labels[permission.state]||labels.error}`;
       $('folderStatus').title=dir.name;
-      button.textContent=permission.state==='denied'?'Review Vault access\u2026':'Restore Vault access\u2026';
+      button.textContent=['error','unsupported'].includes(permission.state)||permission.state==='granted'&&vaultRepairNeeded()?'Reselect original Vault…':permission.state==='denied'?'Review Vault access…':'Restore Vault access…';
       const manualNeedsAccess=manualJob?.active&&manualJob.destination==='vault'&&manualJob.accountId===account;
-      button.classList.toggle('hidden',permission.state==='granted');
+      button.classList.toggle('hidden',permission.state==='granted'&&!vaultRepairNeeded());
       button.disabled=!state.scope?.observed||state.currentContextPending;
       if(manualNeedsAccess&&state.scope?.observed&&!state.currentContextPending)button.disabled=false;
       notifyPanelPermission(permission.state);
@@ -965,24 +972,56 @@
     await refreshVaultStatus();
   }
   async function selectFolder() {
-    if (manualJob?.active || state.sync?.enabled || state.libraryJob?.enabled || state.libraryJob?.job?.active) throw new Error('Pause background updates and Library jobs before changing the Vault.');
+    const active=vaultBindingActive(),previous=state.directory,account=state.scope?.observed&&!state.currentContextPending?state.scope.accountId:null,context=contextGeneration;
+    if(active&&!canReselectVault())throw Error('Pause active jobs before changing the Vault. Reselection is available when access needs repair.');
     if(SURFACE==='popup'){openPanel('settings');return;}
-    if (typeof window.showDirectoryPicker !== 'function')
-      throw new Error('Directory picker unavailable. Use Chrome with File System Access support.');
-    // Picker must be invoked directly from the click gesture, before other awaits.
-    const account=state.scope?.observed&&!state.currentContextPending?state.scope.accountId:null,context=contextGeneration;
-    const dir = await window.showDirectoryPicker({ id: 'chat-archive-exporter-vault', mode: 'readwrite' });
+    if(typeof window.showDirectoryPicker!=='function')throw Error('Directory picker unavailable. Open persistent Settings in a tab.');
+    const dir=await window.showDirectoryPicker({id:'chat-archive-exporter-vault',mode:'readwrite'});
+    const stillHere=()=>context===contextGeneration&&(!account||state.scope?.accountId===account&&!state.currentContextPending);
+    if(!stillHere())throw Error('Workspace changed during the folder picker. No binding was changed.');
+    if(active||vaultBindingActive()){
+      if(!account||!previous)throw Error('Verify the original workspace before repairing an active Vault.');
+      await ChatArchiveVault.verifySameDirectory(previous,dir);
+      const release=await ChatArchiveVault.acquireLock(true);
+      if(!release)throw Error('A local writer is still active. Retry Vault recovery after its current operation.');
+      try{
+        if(!stillHere())throw Error('Workspace changed during Vault recovery.');
+        const bound=await ChatArchiveVault.restoreWorkspaceDirectory(account);
+        if(bound)await ChatArchiveVault.verifySameDirectory(bound,dir);
+        else if(state.sync?.enabled)throw Error('Original monitoring Vault binding is missing. Pause monitoring before changing folders.');
+        const m=manualJob?.active&&manualJob.destination==='vault'&&manualJob.accountId===account?manualJob:null;
+        if(manualJob?.active&&manualJob.destination==='vault'&&!m)throw Error('Activate the workspace of the pending manual job first.');
+        const library=state.libraryJob?.account_id===account&&(state.libraryJob.enabled||state.libraryJob.job?.active);
+        if(m)await ChatArchiveVault.verifySameDirectory(await ChatArchiveManualStore.directory(m.id),dir);
+        if(library)await ChatArchiveVault.verifySameDirectory(await ChatArchiveLibraryStore.directory(account),dir);
+        const p=await ChatArchiveVault.permissionState(dir);
+        if(p.state!=='granted')throw Error('Fresh directory access could not be verified ('+(p.errorName||p.state)+'). Try the picker in persistent Settings.');
+        if(!stillHere())throw Error('Workspace changed during Vault recovery.');
+        await ChatArchiveVault.rememberWorkspaceDirectory(account,dir);
+        await ChatArchiveVault.rememberDirectory(dir);
+        if(library)await ChatArchiveLibraryStore.bind(account,dir);
+        if(m){await ChatArchiveManualStore.bind(m.id,dir);manualDirectory=dir;manualBindingId=m.id;}
+        if(!stillHere())throw Error('Workspace changed after recovery. Activate the original workspace.');
+        state.directory=dir;state.vaultCandidate=dir;state.vaultPermission='granted';state.vaultErrorName=null;holderReadyKey='';holderReadyAt=0;
+      }finally{release();}
+      await refreshVaultStatus();
+      if(state.sync?.enabled)await retainGrantedVault(true);
+      await syncCommand('CAE_MANUAL_WAKE',{accountId:account}).catch(()=>{});
+      if(state.libraryJob?.job?.status==='permission_required')await syncCommand('CAE_LIBRARY_JOB_RESUME',{accountId:account}).catch(()=>{});
+      refreshLibraryControls();status('Original Vault reselected. Settings, enrollment date and accepted jobs retained.');return;
+    }
     restored=null;restoreChecked=null;state.vaultCandidate=dir;
-    if(account&&context===contextGeneration&&state.scope?.accountId===account&&!state.currentContextPending){
+    if(account&&stillHere()){
       await ChatArchiveVault.rememberWorkspaceDirectory(account,dir);
-      if(context===contextGeneration&&state.scope?.accountId===account)state.directory=dir;
+      if(stillHere())state.directory=dir;
     }else if(!state.scope?.observed)state.directory=null;
-    try { await ChatArchiveVault.rememberDirectory(dir); }
-    catch (e) { log('WARNING: This Vault can be used now, but its folder handle could not be remembered: ' + e.message); }
+    try{await ChatArchiveVault.rememberDirectory(dir);}
+    catch(e){log('WARNING: Vault folder could not be remembered: '+e.message);}
     await refreshVaultStatus();refreshLibraryControls();await discoverPreferences();
     status(state.directory===dir?'Vault selected. Existing files and indexes will be reused.':'Vault selected. Verify ChatGPT and connect it to this workspace.');
   }
   async function grantVaultAccess() {
+    if(['error','unsupported'].includes(state.vaultPermission)||state.vaultPermission==='granted'&&vaultRepairNeeded())return selectFolder();
     if(!state.scope?.observed||state.currentContextPending)throw Error('Reconnect ChatGPT and verify the workspace before reconnecting its Vault.');
     const dir=state.directory||state.vaultCandidate,account=state.scope.accountId,context=contextGeneration;
     if (!dir) throw new Error('Choose a Vault directory first.');
@@ -1285,22 +1324,47 @@
       await persistPortable({chat:syncSaved(),library:{enabled:!!state.libraryJob?.enabled,monitorOnStart:prefs.monitorOnStart},export:exportPrefs}).catch(e=>log('WARNING: Could not save portable settings: '+e.message));
     }finally{applyingRestored=false;updateSyncApply();}
   }
+  let diagnosticsText=null;
+  async function collectAccessDiagnostics(){
+    const local={schema:'cae.connection-diagnostics.v1',extensionVersion:chrome.runtime.getManifest?.().version||'unknown',
+      exportedAt:new Date().toISOString(),surface:SURFACE,online:navigator.onLine!==false,
+      workspaceVerified:!!state.scope?.observed&&!state.currentContextPending,bridgeConnected:!!state.port,
+      vaultSelected:!!(state.directory||state.vaultCandidate),vaultBound:!!state.directory,
+      vaultPermission:state.vaultPermission,vaultErrorName:state.vaultErrorName||null,monitoringKnown:state.syncLoaded,
+      monitoringEnabled:state.syncLoaded?!!state.sync?.enabled:null,connectionCode:state.lastConnectionCode,
+      controllerCode:state.lastControllerCode,controllerCommand:state.lastControllerCommand,workerAvailable:false};
+    try{local.workerReport=await syncCommand('CAE_VAULT_DIAGNOSTICS',{accountId:state.scope?.accountId});local.workerAvailable=true;}
+    catch(e){local.controllerCode=connectionCode(e);local.controllerCommand='CAE_VAULT_DIAGNOSTICS';}
+    diagnosticsText=JSON.stringify(local,null,2)+'\n';return diagnosticsText;
+  }
+  function showDiagnosticsText(text){
+    const area=$('accessDiagnosticsText');area.value=text;area.classList.remove('hidden');area.focus();area.select();
+  }
   $('exportAccessDiagnostics').addEventListener('click',async()=>{
     const button=$('exportAccessDiagnostics');button.disabled=true;
     try{
-      const local={schema:'cae.connection-diagnostics.v1',extensionVersion:chrome.runtime.getManifest?.().version||'unknown',
-        exportedAt:new Date().toISOString(),surface:SURFACE,online:navigator.onLine!==false,
-        workspaceVerified:!!state.scope?.observed&&!state.currentContextPending,bridgeConnected:!!state.port,
-        vaultSelected:!!(state.directory||state.vaultCandidate),vaultBound:!!state.directory,
-        vaultPermission:state.vaultPermission,vaultErrorName:state.vaultErrorName||null,monitoringKnown:state.syncLoaded,
-        monitoringEnabled:state.syncLoaded?!!state.sync?.enabled:null,connectionCode:state.lastConnectionCode,
-        controllerCode:state.lastControllerCode,controllerCommand:state.lastControllerCommand,workerAvailable:false};
-      try{local.workerReport=await syncCommand('CAE_VAULT_DIAGNOSTICS',{accountId:state.scope?.accountId});local.workerAvailable=true;}
-      catch(e){local.controllerCode=connectionCode(e);local.controllerCommand='CAE_VAULT_DIAGNOSTICS';}
-      downloadBlob(new Blob([JSON.stringify(local,null,2)+'\n'],{type:'application/json'}),
-        'CAE-access-diagnostics-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json');
-      status(local.workerAvailable?'Access diagnostics downloaded.':'Local diagnostics downloaded; background controller unavailable.');
-    }catch(error){fail(error);}finally{button.disabled=false;}
+      const json=await collectAccessDiagnostics();
+      const id=await chrome.downloads.download({url:'data:application/json;charset=utf-8,'+encodeURIComponent(json),
+        filename:'CAE-access-diagnostics-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json',saveAs:false,conflictAction:'uniquify'});
+      status('Diagnostic download accepted; verifying completion…');
+      const until=Date.now()+15000;
+      while(Date.now()<until){
+        const rows=await deadline(chrome.downloads.search({id}),'Diagnostic download status',3000);
+        const item=rows?.[0];
+        if(item?.state==='complete'){status('Access diagnostics saved.');return;}
+        if(item?.state==='interrupted'){showDiagnosticsText(json);status('Diagnostic download interrupted ('+(item.error||'unknown')+'). Copy the report instead.');return;}
+        await new Promise(resolve=>setTimeout(resolve,500));
+      }
+      status('Diagnostic download not yet confirmed. Check browser Downloads or copy the report.');
+    }catch(error){if(diagnosticsText)showDiagnosticsText(diagnosticsText);fail(error);}finally{button.disabled=false;}
+  });
+  $('copyAccessDiagnostics').addEventListener('click',async()=>{
+    const button=$('copyAccessDiagnostics');button.disabled=true;
+    try{
+      const json=diagnosticsText||await collectAccessDiagnostics();
+      try{await navigator.clipboard.writeText(json);status('Access diagnostics copied.');}
+      catch{showDiagnosticsText(json);status('Select and copy the diagnostic JSON (Ctrl+C).');}
+    }catch(e){fail(e);}finally{button.disabled=false;}
   });
   $('syncApply').addEventListener('click',()=>applySync().catch(e=>{fail(e);refreshSync(true).catch(()=>{});}));
   $('syncPause').addEventListener('click',async()=>{

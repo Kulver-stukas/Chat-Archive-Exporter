@@ -167,7 +167,7 @@ chrome.runtime.onConnect.addListener(port=>{
     const event=account===msg.accountId?'panel_state':'panel_open';
     account=msg.accountId;lastSignature=signature;lastAt=Date.now();
     ChatArchiveSync.probeAccess(account,event,{panelState:msg.permission,
-      userActivation:msg.userActivation===true}).catch(()=>{});
+      panelErrorName:typeof msg.errorName==='string'?msg.errorName.slice(0,60):null,userActivation:msg.userActivation===true}).catch(()=>{});
   });
   port.onDisconnect.addListener(()=>{
     const ignored=chrome.runtime.lastError?.message; // acknowledge expected close

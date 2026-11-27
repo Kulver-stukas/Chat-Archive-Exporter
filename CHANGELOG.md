@@ -1,3 +1,12 @@
+## v0.1.9 rev.8 — Vault reselect and shared local writer guard (test)
+
+- Reselect the exact original Vault while monitoring remains enabled; verify native entry identity, retain enrollment date, queue, policies and same-folder job bindings. Reject different folders during active work.
+- Coalesce pending permission checks and back off failed automatic probes; distinguish UI, worker and offscreen errors in versioned diagnostics.
+- Diagnostic downloads use browser download tracking and a popup-independent data URL; Copy diagnostics/manual copy fallback.
+- Cooperative cross-profile writer claims under `ChatGPT/.chat-archive/writers/`: publish a unique marker before checking competing markers; hold until the current read-modify-write transaction ends. No automatic stale claim removal. Conditional on coherent local filesystem visibility, not a cross-machine/OS mutex or protection against old versions.
+- Reload current Library inventory before incremental work, reject stale staged inventory commits, merge original-file archival results with the current catalog, preserve newer chat revisions.
+- No new permissions; native Chrome/Edge concurrent UAT required.
+
 ## v0.1.9 rev.7 — Portable settings and access recovery (test)
 
 - Restore saved workspace settings with explicit Apply restored settings; preserve browser-local permissions and jobs.
