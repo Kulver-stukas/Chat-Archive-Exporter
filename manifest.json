@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Chat Archive Exporter BETA",
   "description": "ChatGPT Markdown and original-source export to Vault, with opt-in workspace-scoped background updates.",
-  "version": "0.1.9.8",
+  "version": "0.1.9.9",
   "minimum_chrome_version": "116",
   "permissions": [
     "sidePanel",
@@ -51,7 +51,7 @@
       "run_at": "document_idle"
     }
   ],
-  "version_name": "0.1.9 rev.8 (test)",
+  "version_name": "0.1.9 rev.9 (beta)",
   "icons": {
     "16": "icons/cae-base-16.png",
     "32": "icons/cae-base-32.png",

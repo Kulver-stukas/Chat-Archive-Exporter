@@ -1172,7 +1172,7 @@
   }
 
   function connectionCode(error){
-    const code=error?.code;
+    const code=error?.code;if(code==='VAULT_BUSY')return code;
     if(['AUTH_REQUIRED','SESSION_TIMEOUT','NETWORK_ERROR','SESSION_INVALID_RESPONSE','WORKSPACE_UNVERIFIED','IDB_BLOCKED','TIMEOUT','BRIDGE_UNAVAILABLE'].includes(code))return code;
     const msg=String(error?.message||'');
     return /timed out|timeout/i.test(msg)?'TIMEOUT':/network|fetch/i.test(msg)?'NETWORK_ERROR':/channel closed|disconnected|receiving end|connection|no response/i.test(msg)?'CONNECTION_UNAVAILABLE':'UNAVAILABLE';
@@ -1188,7 +1188,7 @@
       // Read requests can expire; never automatically retry a mutating command.
       const readOnly=['CAE_MANUAL_STATUS','CAE_SYNC_STATUS','CAE_LIBRARY_JOB_STATUS','CAE_EXPORT_PREFS_GET','CAE_UI_CHAT_CACHE','CAE_VAULT_DIAGNOSTICS'].includes(type);
       const response=readOnly?await deadline(pending,type,12000):await pending;
-      if(!response?.ok)throw new Error(response?.error||'No response to '+type+' from the background controller.');
+      if(!response?.ok)throw Object.assign(new Error(response?.error||'No response to '+type+' from the background controller.'),{code:response?.code});
       return response.result;
     }catch(e){state.lastControllerCode=connectionCode(e);state.lastControllerCommand=type;throw e;}
   }
@@ -1324,6 +1324,41 @@
       await persistPortable({chat:syncSaved(),library:{enabled:!!state.libraryJob?.enabled,monitorOnStart:prefs.monitorOnStart},export:exportPrefs}).catch(e=>log('WARNING: Could not save portable settings: '+e.message));
     }finally{applyingRestored=false;updateSyncApply();}
   }
+  let reviewedClaims=null,reviewedBinding=null;
+  function resetClaimReview(){
+    reviewedClaims=null;reviewedBinding=null;$('writerClaimsConfirmed').checked=false;
+    $('writerClaimsConfirm').classList.add('hidden');$('clearWriterClaims').disabled=true;
+  }
+  function verifiedClaimDirectory(){
+    if(!state.scope?.observed||state.currentContextPending||!state.directory||state.vaultPermission!=='granted')
+      throw Error('Verify the Workspace and grant Vault access first.');
+    return state.directory;
+  }
+  $('reviewWriterClaims').addEventListener('click',async()=>{
+    resetClaimReview();const button=$('reviewWriterClaims');button.disabled=true;
+    try{
+      const dir=verifiedClaimDirectory(),account=state.scope.accountId,context=contextGeneration;
+      const rows=await deadline(ChatArchiveVault.inspectWriterClaims(dir),'Writer claim review',10000);
+      if(state.directory!==dir||state.scope?.accountId!==account||context!==contextGeneration)throw Error('Workspace changed; review again.');
+      reviewedClaims=rows;reviewedBinding={dir,account,context};
+      $('writerClaimsStatus').textContent=rows.length?rows.length+' writer claim(s): '+ChatArchiveVault.writerClaimSummary(rows,account).map(r=>r.owner+' / '+r.workspace+' workspace / '+r.operation+' / '+(r.ageSeconds==null?'age unknown':r.ageSeconds+' s old')).join('; ')+'. Age does not prove a writer has stopped.':'No writer claims found.';
+      if(rows.length)$('writerClaimsConfirm').classList.remove('hidden');
+    }catch(e){$('writerClaimsStatus').textContent=e.message;fail(e);}finally{button.disabled=false;}
+  });
+  $('writerClaimsConfirmed').addEventListener('change',()=>{$('clearWriterClaims').disabled=!reviewedClaims?.length||!$('writerClaimsConfirmed').checked;});
+  $('clearWriterClaims').addEventListener('click',async()=>{
+    const rows=reviewedClaims,binding=reviewedBinding,confirmed=$('writerClaimsConfirmed').checked;resetClaimReview();
+    try{
+      const dir=verifiedClaimDirectory();
+      if(!binding||dir!==binding.dir||state.scope.accountId!==binding.account||contextGeneration!==binding.context)throw Error('Workspace changed; review again.');
+      // Do not race a timeout against deletion; wait for the actual result.
+      const count=await ChatArchiveVault.clearWriterClaims(dir,rows,confirmed);
+      $('writerClaimsStatus').textContent=count+' reviewed writer claim(s) removed. No archive indexes were deleted.';
+      await syncCommand('CAE_SYNC_WAKE',{accountId:binding.account}).catch(()=>{});
+      await syncCommand('CAE_MANUAL_WAKE',{accountId:binding.account}).catch(()=>{});
+      status('Writer claims cleared. Monitoring and queued jobs can retry.');
+    }catch(e){$('writerClaimsStatus').textContent=e.message;fail(e);}
+  });
   let diagnosticsText=null;
   async function collectAccessDiagnostics(){
     const local={schema:'cae.connection-diagnostics.v1',extensionVersion:chrome.runtime.getManifest?.().version||'unknown',
@@ -1335,6 +1370,10 @@
       controllerCode:state.lastControllerCode,controllerCommand:state.lastControllerCommand,workerAvailable:false};
     try{local.workerReport=await syncCommand('CAE_VAULT_DIAGNOSTICS',{accountId:state.scope?.accountId});local.workerAvailable=true;}
     catch(e){local.controllerCode=connectionCode(e);local.controllerCommand='CAE_VAULT_DIAGNOSTICS';}
+    if(state.directory&&state.vaultPermission==='granted'&&typeof ChatArchiveVault.inspectWriterClaims==='function'){
+      try{local.writerClaims=ChatArchiveVault.writerClaimSummary(await deadline(ChatArchiveVault.inspectWriterClaims(state.directory),'Writer claim diagnostics',5000),state.scope?.accountId);}
+      catch(e){local.writerClaimsError=connectionCode(e);}
+    }
     diagnosticsText=JSON.stringify(local,null,2)+'\n';return diagnosticsText;
   }
   function showDiagnosticsText(text){

@@ -1,3 +1,9 @@
+## v0.1.9.9 — recover abandoned writer claims (beta candidate)
+
+- Issue #6: stable installation ID and identified operation markers; recover own abandoned claims under exclusive local Web Lock without discarding queued work.
+- Review and explicitly clear legacy/foreign claims only after stopping other writers; refuse changed snapshots. Report redacted diagnostics and VAULT_BUSY.
+- Keep the global guard and existing archive schemas. Issue #7 and TODO track provider/workspace resource separation.
+
 # Changelog
 
 ## v0.1.9.8 — v0.1 maintenance baseline (2026-11-27)

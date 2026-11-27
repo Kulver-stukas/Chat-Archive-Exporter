@@ -15,6 +15,6 @@ for(const [file,sha] of Object.entries(baseline.archive_core)){
 }
 // rev.6 deliberately changes message authorization and startup handling. Freeze
 // this reviewed worker while retaining the prior core/permission baseline.
-assert.equal(hash(fs.readFileSync(path.join(root,'worker.js'))),'a12f57f1642cc04b79f16625c6fe7bbc5651843c307800aabb97ca81932a9c75');
+assert.equal(hash(fs.readFileSync(path.join(root,'worker.js'))),'928f15f843a7c2daa7a8e25e8433a6c3f9331f4b262b65f7c3b83d15d0c79914');
 const m=require('../manifest.json');assert.deepEqual(m.permissions,baseline.permissions);assert.deepEqual(m.host_permissions,baseline.host_permissions);assert.equal(m.minimum_chrome_version,'116');
-console.log('PASS: explicit integrity/selection delta allowlist, unrelated core unchanged and reviewed rev.8 worker, no permission expansion');
+console.log('PASS: explicit integrity/selection delta allowlist, unrelated core unchanged and reviewed rev.9 worker, no permission expansion');
