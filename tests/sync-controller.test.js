@@ -9,7 +9,8 @@ class FH{constructor(name){this.name=name;this.bytes=new Uint8Array();this.mtime
  async createWritable(){const chunks=[];const that=this;return new WritableStream({write(x){chunks.push(typeof x==='string'?new TextEncoder().encode(x):new Uint8Array(x));},close(){const out=new Uint8Array(chunks.reduce((n,x)=>n+x.length,0));let off=0;for(const x of chunks){out.set(x,off);off+=x.length;}that.bytes=out;that.mtime=++mtime;}});}}
 // Production uses writable.write/close, whereas stream copy uses pipeTo. Expose both.
 const orig=FH.prototype.createWritable;FH.prototype.createWritable=async function(){const s=await orig.call(this);s.write=async x=>{const w=s.getWriter();try{await w.write(x);}finally{w.releaseLock();}};s.close=async()=>{const w=s.getWriter();try{await w.close();}finally{w.releaseLock();}};return s;};
-class Dir{constructor(name='Vault'){this.name=name;this.children=new Map();this.granted=true;}
+class Dir{constructor(name='Vault'){this.kind='directory';this.name=name;this.children=new Map();this.granted=true;}
+ async *entries(){yield* this.children.entries();}
  async getDirectoryHandle(name,opt={}){if(!this.children.has(name)){if(!opt.create)throw new Missing();this.children.set(name,new Dir(name));}const x=this.children.get(name);if(!(x instanceof Dir))throw Error('Not directory');return x;}
  async getFileHandle(name,opt={}){if(!this.children.has(name)){if(!opt.create)throw new Missing();this.children.set(name,new FH(name));}return this.children.get(name);}
  async removeEntry(name){if(!this.children.delete(name))throw new Missing();}

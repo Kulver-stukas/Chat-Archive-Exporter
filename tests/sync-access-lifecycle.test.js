@@ -14,7 +14,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
   const w={chrome,console,ChatArchiveSyncPolicy:policy,
    ChatArchiveSyncSpool:{readMirror:async()=>null,stats:async()=>({pending:0,conflicts:0,bytes:0}),pending:async()=>[],seed:async()=>null},Date:class extends Date{static now(){return time;}},setTimeout:()=>1,clearTimeout(){},
    ChatArchiveVault:{permissionState:V.permissionState,restoreWorkspaceDirectory:async id=>{restores.push(id);return dirs.get(id)||null;},
-     hasPermission:async dir=>(await V.permissionState(dir)).state==='granted',acquireLock:async()=>()=>{},writeFile:async()=>{diskWrites++;}},
+     hasPermission:async dir=>(await V.permissionState(dir)).state==='granted',acquireLock:async()=>()=>{},acquireVaultGuard:async()=>async()=>{},writeFile:async()=>{diskWrites++;}},
    ChatArchiveVaultContext:{reconcile:async ids=>{reconciles.push([...ids]);for(const id of holders.keys())if(!ids.includes(id))holders.delete(id);for(const id of ids)holders.set(id,dirs.get(id));},
      check:async(id,opt)=>{checks.push({id,...opt});holders.set(id,dirs.get(id));return {permission:'granted',retained:!!dirs.get(id),holderInstance:'instance-one'};},
      release:async id=>{released.push(id);holders.delete(id);}},
