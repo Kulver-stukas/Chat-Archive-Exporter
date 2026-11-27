@@ -13,8 +13,9 @@
     try{return Promise.resolve(chrome.runtime.sendMessage(data)).catch(()=>null);}
     catch{stop();return Promise.resolve(null);}
   };
-  const cid=()=>/\/c\/([a-f0-9-]{36})(?:\/|$)/i.exec(location.pathname)?.[1]||'';
-  const pid=()=>/\/g\/(g-p-[a-f0-9]{32})(?:[-/]|$)/i.exec(location.pathname)?.[1]||'';
+  const provider=globalThis.ChatArchiveProviders.legacy;
+  const cid=()=>provider.observedConversationId(location.pathname);
+  const pid=()=>provider.observedProjectId(location.pathname);
   function stop(){
     enabled=false;clearTimeout(timer);timer=null;last='';observed='';observedRole='';
     wasStreaming=false;hiddenAt=0;lastEmit=0;settleUntil=0;awaitingUntil=0;retryAfter=0;

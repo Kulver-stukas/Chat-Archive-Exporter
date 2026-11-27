@@ -1,35 +1,16 @@
-# Changelog
+## v0.2.0 rev.2 — Architecture preview / rev.6–8 integration (2026-11-27)
 
-## v0.1.9.8 — v0.1 maintenance baseline (2026-11-27)
+- Port the cumulative v0.1.9 rev.6, rev.7 and rev.8 fixes while retaining the rev.1 provider contracts, registry, ChatGPT descriptor and RPC facade.
+- Resolve existing Vault workspaces by verified immutable account ID; restore portable monitoring/export preferences and reconnect the original directory without resetting active monitoring or accepted jobs.
+- Bound and coalesce permission probes, improve diagnostics and download verification, preserve worker recovery and explicit permission requests.
+- Serialize cooperative writers across browser instances sharing a local Vault; preserve newer chat revisions and reject stale Library inventory commits. Stale writer claims require safe manual cleanup.
+- No new provider, permission, Vault migration or deeper architecture refactor in this revision.
 
-- Publish the tested rev.8 source and installation packages on GitHub, incorporating the rev.6–8 fixes listed below.
-- Record the Chrome Web Store listing and the one-release-per-store-version policy.
-- Retain the beta designation, numerical manifest version, runtime revision label and existing permission scope. No runtime changes from the tested rev.8 commit.
-- Keep the v0.1 maintenance line separate from the v0.2 architecture work. Store approval or availability of this specific version is not established by the GitHub release.
+## v0.2.0 rev.1 — Architecture preview (2026-11-26)
 
-## v0.1.9 rev.8 — Vault reselect and shared local writer guard (test)
-
-- Reselect the exact original Vault while monitoring remains enabled; verify native entry identity, retain enrollment date, queue, policies and same-folder job bindings. Reject different folders during active work.
-- Coalesce pending permission checks and back off failed automatic probes; distinguish UI, worker and offscreen errors in versioned diagnostics.
-- Diagnostic downloads use browser download tracking and a popup-independent data URL; Copy diagnostics/manual copy fallback.
-- Cooperative cross-profile writer claims under `ChatGPT/.chat-archive/writers/`: publish a unique marker before checking competing markers; hold until the current read-modify-write transaction ends. No automatic stale claim removal. Conditional on coherent local filesystem visibility, not a cross-machine/OS mutex or protection against old versions.
-- Reload current Library inventory before incremental work, reject stale staged inventory commits, merge original-file archival results with the current catalog, preserve newer chat revisions.
-- No new permissions; native Chrome/Edge concurrent UAT required.
-
-## v0.1.9 rev.7 — Portable settings and access recovery (test)
-
-- Restore saved workspace settings with explicit Apply restored settings; preserve browser-local permissions and jobs.
-- Independent cached diagnostics, bounded browser permission checks and partial widget status.
-- Required-action button states and popup Choose Vault opens side panel settings.
-
-## v0.1.9 rev.6 — Cold Start & Existing Vault Recovery (test)
-
-- Distinguish trusted extension UI documents (including the options tab) from top-level ChatGPT content scripts; maintain the existing permission and host allowlists.
-- Align connection deadlines with the session fetch, distinguish connection failures from Vault permissions, retry after network recovery, and report unknown rather than disabled status on failed reads.
-- Restore a verified existing workspace directory by immutable account ID, retain its original path, and require explicit per-profile opt-in. Reject ambiguous or foreign archive directories; no archive format migration or automatic enrollment.
-- Preserve a selected but not yet workspace-bound Vault as an explicit reconnect candidate. Export local, redacted connection diagnostics even if the worker does not respond.
-- Handle blocked Vault and Library IndexedDB opens. No new browser permissions, no automatic file permission requests. Cross-profile concurrent Vault writers remain unsupported.
-- Native authenticated Chrome and Edge acceptance testing is required before publishing Beta 3.
+- Establish provider contracts, registry, and centralized ChatGPT host/session/route rules; keep user-visible behavior and archive schemas unchanged.
+- Route legacy consumers through the registered provider and content RPC facade. Add baseline parity fixtures and architecture checks.
+- Retain only ChatGPT; no new permissions, providers or UX features.
 
 ## v0.1.9 Beta 2 (2026-11-26)
 

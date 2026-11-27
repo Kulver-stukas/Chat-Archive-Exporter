@@ -21,7 +21,7 @@ const env={chrome:{runtime},document:doc,location:{pathname:'/c/'+id,search:''},
   Date:{now:()=>now},window:{addEventListener(){}},
   setTimeout(fn,ms){const n=++seq;timers.set(n,{fn,ms});return n;},
   clearTimeout(n){timers.delete(n);}};
-vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../sync-watch.js'),'utf8'),env);
+vm.runInContext(fs.readFileSync(path.join(__dirname,'../sync-watch.js'),'utf8'),require('./provider-bootstrap').boot(env));
 assert.equal(sent.filter(x=>x.type==='CAE_SYNC_SIGNAL').length,0,'inert before opting in');
 listener({type:'CAE_SYNC_WATCH',enabled:true},{id:'self'},()=>{});
 assert.equal(sent.at(-1).streaming,false,'existing assistant response is a stable baseline');

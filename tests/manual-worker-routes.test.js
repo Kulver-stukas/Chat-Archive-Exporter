@@ -6,7 +6,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
   downloads:{onChanged:event()},alarms:{onAlarm:event()},tabs:{onActivated:event(),onUpdated:event(),query:async()=>[{id:7}]},windows:{onFocusChanged:event(),WINDOW_ID_NONE:-1}};
  const manual={ALARM:'manual'};for(const k of ['submit','quick','inspect','cancel','retry','resume','startup','downloadChanged','tick'])manual[k]=async arg=>{called.push([k,arg]);return {id:'job12345'};};
  const sync={ALARM:'auto',startup:async()=>{},_state:()=>({workspaces:{}}),armTab:async()=>{},probeAccess:async()=>{},tick:async()=>{}};
- vm.runInNewContext(fs.readFileSync(__dirname+'/../worker.js','utf8'),{chrome,console,importScripts(){},ChatArchiveManualJobs:manual,ChatArchiveSync:sync});
+ vm.runInContext(fs.readFileSync(__dirname+'/../worker.js','utf8'),require('./provider-bootstrap').boot({chrome,console,importScripts(){},ChatArchiveManualJobs:manual,ChatArchiveSync:sync}));
  const route=chrome.runtime.onMessage.listeners[0];const invoke=(msg,sender={id:'self',url:'chrome-extension://self/panel.html'})=>new Promise(resolve=>assert.equal(route(msg,sender,resolve),true));
  await invoke({type:'CAE_MANUAL_SUBMIT',options:{requestId:'job12345'}});assert(called.some(([k,a])=>k==='submit'&&a.requestId==='job12345'));
  for(const type of ['CAE_MANUAL_SUBMIT','CAE_MANUAL_CANCEL','CAE_MANUAL_RETRY','CAE_MANUAL_STATUS','CAE_MANUAL_WAKE']){

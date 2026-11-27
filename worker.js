@@ -1,16 +1,15 @@
+importScripts('contracts/provider.js','providers/chatgpt/descriptor.js','providers/registry.js');
 importScripts('lib/export-selection.js','lib/export-preferences.js','lib/normalize.js','lib/config-inventory.js','lib/hash.js','lib/paths.js','lib/meta.js','lib/sources.js',
   'lib/vault.js','lib/vault-transfer.js','lib/sync-policy.js','lib/sync-spool.js','lib/sync-rpc.js','lib/vault-context.js','lib/vault-diagnostics.js','lib/sync.js','lib/tab-bootstrap.js','lib/manual-store.js','lib/manual-attachments.js','lib/manual-jobs.js',
   'lib/library-inventory.js','lib/library-policy.js','lib/library-store.js','lib/library-vault.js','lib/library-jobs.js');
 
-/* MessageSender.tab also exists for an extension options page in a normal tab.
- * Require an allowlisted extension document or a top-level ChatGPT content
- * script; the tab field alone is not an authorization boundary. */
+/* Options pages can have a sender.tab. Require an allowlisted UI or top-level provider script. */
 function caeMessageContext(sender) {
   if (sender?.id !== chrome.runtime.id) return '';
   const url=String(sender.url||'').split(/[?#]/)[0];
   if (['panel.html','popup.html','options.html'].some(p=>url===chrome.runtime.getURL(p))) return 'ui';
-  const host=/^https:\/\/(chatgpt\.com|chat\.openai\.com)(\/|$)/i;
-  if (Number.isInteger(sender.tab?.id)&&sender.frameId===0&&host.test(url)&&host.test(sender.tab.url||'')) return 'chat';
+  const providers=globalThis.ChatArchiveProviders;
+  if (Number.isInteger(sender.tab?.id)&&sender.frameId===0&&providers.isLegacyUrl(url)&&providers.isLegacyUrl(sender.tab.url||'')) return 'chat';
   return '';
 }
 

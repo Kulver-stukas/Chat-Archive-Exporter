@@ -49,7 +49,7 @@ function createEnvironment(){
      structuredClone,atob,btoa,Date:FakeDate,Map,Set,Promise,chrome,crypto:require('node:crypto').webcrypto,
      indexedDB:fake.indexedDB,IDBKeyRange:fake.IDBKeyRange,navigator:{locks},
      setTimeout:(fn,ms)=>{if(ms>800&&ms<=1400){now+=ms;queueMicrotask(fn);}return 1;},clearTimeout(){}};
-   vm.createContext(box);
+   vm.createContext(box);require('./provider-bootstrap').boot(box);
    for(const f of ['export-selection','export-preferences','normalize','hash','paths','meta','sources','vault','vault-transfer','manual-store','manual-attachments'])vm.runInContext(fs.readFileSync(path.join(base,'lib/'+f+'.js'),'utf8'),box);
    box.ChatArchiveManualStore.bind=async(k,h)=>handles.set(k,h);
    box.ChatArchiveManualStore.directory=async k=>handles.get(k)||null;

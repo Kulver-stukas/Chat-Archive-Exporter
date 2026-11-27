@@ -29,6 +29,7 @@ const chrome = {runtime: {id:'mock-extension',getManifest:()=>({version:'0.1.9'}
 const api = {status: async () => { throw new Error('No API requests permitted before export'); }};
 const context=vm.createContext({window, document, location, chrome, ChatArchiveApi:api,
   __CAE_CONTENT_BOOT_VERSION:'0.1.8',setInterval:cb=>{interval.push(cb)}, clearInterval:()=>{}, setTimeout:()=>{}});
+require('./provider-bootstrap').boot(context);
 vm.runInContext(source,context,{filename:'content.js'});
 assert(!nodes.has('cae-inpage-button'),'A new content-script boot retires the legacy page button.');
 assert.strictEqual(window.fetch, fetch);

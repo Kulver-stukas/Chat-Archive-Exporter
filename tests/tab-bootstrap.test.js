@@ -14,13 +14,13 @@ const chrome={
  },
  scripting:{executeScript:async x=>{
    installs++;
-   assert.deepEqual(Array.from(x.files),['lib/export-selection.js','lib/normalize.js','lib/config-inventory.js','lib/source-transfer.js','lib/library-inventory.js','lib/api.js','content.js','sync-watch.js']);
+   assert.deepEqual(Array.from(x.files),[...require('./provider-bootstrap').files,'lib/export-selection.js','lib/normalize.js','lib/config-inventory.js','lib/source-transfer.js','lib/library-inventory.js','lib/api.js','content.js','sync-watch.js']);
    assert.equal(x.world,'ISOLATED');assert.equal(x.target.frameIds[0],0);
    active.add(x.target.tabId);
  }}
 };
 const sandbox={chrome,setTimeout,clearTimeout};
-vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../lib/tab-bootstrap.js'),'utf8'),sandbox);
+vm.runInContext(fs.readFileSync(path.join(__dirname,'../lib/tab-bootstrap.js'),'utf8'),require('./provider-bootstrap').boot(sandbox));
 const T=sandbox.ChatArchiveTabBootstrap;
 (async()=>{
  let a=await T.ensure(1);assert(a.ok&&a.injected);assert.equal(installs,1);

@@ -4,7 +4,7 @@ const event=()=>({calls:[],addListener(cb){this.calls.push(cb);}});
 let hello=0;
 const chrome={runtime:{id:'same',getManifest:()=>({version:'0.1.6.4'}),onConnect:event(),onMessage:event(),sendMessage:async()=>{hello++;return {ok:true};}}};
 const sandbox={chrome,document:{readyState:'complete',body:{},visibilityState:'visible',getElementById:()=>null,addEventListener(){}},location:{pathname:'/',search:''},window:{addEventListener(){}},setInterval(){},setTimeout,clearTimeout,AbortController,console};
-vm.createContext(sandbox);
+vm.createContext(sandbox);require('./provider-bootstrap').boot(sandbox);
 for(let n=0;n<3;n++)vm.runInContext(fs.readFileSync(path.join(__dirname,'../content.js'),'utf8'),sandbox);
 assert.equal(chrome.runtime.onConnect.calls.length,1,'duplicate injection must not register multiple ports');
 assert.equal(chrome.runtime.onMessage.calls.length,1);

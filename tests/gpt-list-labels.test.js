@@ -16,7 +16,7 @@ const sandbox={window:{},document:{cookie:''},location:{origin:'https://chatgpt.
      display:{name:'#B2 - EnglFy English Tutor',description:'English tutor'},instructions:'PRIVATE-DO-NOT-COPY'}}}]});
    throw Error('Unexpected request '+url);
  }};
-vm.createContext(sandbox);
+vm.createContext(sandbox);require('./provider-bootstrap').boot(sandbox);
 for(const f of ['lib/config-inventory.js','lib/api.js'])vm.runInContext(fs.readFileSync(path.join(base,f),'utf8'),sandbox);
 (async()=>{
  const r=await sandbox.window.ChatArchiveApi.listAll();

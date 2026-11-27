@@ -8,7 +8,7 @@ function make(responder){
   const box={window:{},document:{cookie:''},location:{origin:'https://chatgpt.com',pathname:'/c/aaaaaaaa-1111-2222-3333-444444444444'},URL,AbortSignal,Date:D,
     setTimeout:(cb,ms)=>{clock+=ms;queueMicrotask(cb);},
     fetch:async(p,o)=>{calls.push({path:p,opts:o});if(p==='/api/auth/session')return Response.json({account:{id:account},accessToken:'private-token'});return responder(p,o);}};
-  vm.runInNewContext(source,box);return {api:box.window.ChatArchiveApi,calls};
+  vm.runInContext(source,require('./provider-bootstrap').boot(box));return {api:box.window.ChatArchiveApi,calls};
 }
 (async()=>{
  const p={gizmo:{id:pid,workspace_id:account,instructions:'user instructions',display:{name:'Test'},memory_scope:'DO_NOT_EXPORT'},files:[]};

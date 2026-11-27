@@ -28,7 +28,7 @@ function environment(){
       throw Error('Unexpected request '+path);
     }};
   box.window=box;
-  vm.createContext(box);
+  vm.createContext(box);require('./provider-bootstrap').boot(box);
   for(const f of ['export-selection','normalize','library-inventory','api'])
     vm.runInContext(fs.readFileSync(__dirname+'/../lib/'+f+'.js','utf8'),box);
   e.api=box.ChatArchiveApi;

@@ -6,7 +6,7 @@ p = argparse.ArgumentParser()
 p.add_argument('output', type=Path)
 args = p.parse_args()
 files = [f for f in root.iterdir() if f.is_file() and (f.suffix in {'.js', '.html', '.css'} or f.name in {'manifest.json', 'LICENSE', 'PRIVACY.md'})]
-for directory in ('lib', 'ui', 'icons'):
+for directory in ('lib', 'ui', 'icons', 'contracts', 'providers'):
     files.extend(f for f in (root / directory).rglob('*') if f.is_file() and f.suffix in {'.js', '.css', '.html', '.png', '.svg'})
 names = {f.relative_to(root).as_posix() for f in files}
 m = json.loads((root / 'manifest.json').read_text())

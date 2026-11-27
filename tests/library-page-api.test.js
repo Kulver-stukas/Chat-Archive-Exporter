@@ -13,7 +13,7 @@ const box={window:{},document:{cookie:''},location:{origin:'https://chatgpt.com'
   if(path.startsWith('/backend-api/files/download/'))return Response.json({download_url:'https://chatgpt.com/backend-api/estuary/content?id='+fid+'&sig=PRIVATE-SIGNATURE'});
   throw Error('Unexpected route '+path);
  }};
-vm.createContext(box);for(const f of ['library-inventory','config-inventory','api'])vm.runInContext(fs.readFileSync(__dirname+'/../lib/'+f+'.js','utf8'),box);
+vm.createContext(box);require('./provider-bootstrap').boot(box);for(const f of ['library-inventory','config-inventory','api'])vm.runInContext(fs.readFileSync(__dirname+'/../lib/'+f+'.js','utf8'),box);
 (async()=>{
  const api=box.window.ChatArchiveApi;
  let r=await api.libraryPage({kind:'nodes'},A);assert.equal(r.items.length,1);assert(!JSON.stringify(r).includes('PRIVATE'));

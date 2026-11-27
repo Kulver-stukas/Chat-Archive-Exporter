@@ -73,7 +73,7 @@
     return bad.includes(state.vaultPermission)||state.vaultPermission==='prompt'||!!state.sync?.enabled&&bad.includes(state.sync?.access?.worker);
   }
   function vaultBindingActive(){return !!(manualJob?.active||state.sync?.enabled||state.libraryJob?.enabled||state.libraryJob?.job?.active);}
-  function canReselectVault(){return vaultBindingActive()?!!state.directory&&!!state.scope?.observed&&!state.currentContextPending&&vaultRepairNeeded():!state.busy;}
+  function canReselectVault(){return vaultBindingActive()?!!state.directory&&providers.verified(state.scope)&&!state.currentContextPending&&vaultRepairNeeded():!state.busy;}
   function uiRefresh(){
     const account=libraryAccount();const j=manualJob?.accountId===account?manualJob:null;
     const a=U.activity(j,state.libraryJob,state.sync);
@@ -86,7 +86,7 @@
     const permission={granted:'connected',prompt:bg?'background connected; confirm here':'confirmation required here',
       denied:'access denied',no_handle:'not connected',unsupported:'permission check unavailable',
       error:'permission check unavailable',unknown:'checking access'};
-    const selected=state.directory||state.vaultCandidate,verified=!!state.scope?.observed&&!state.currentContextPending;
+    const selected=state.directory||state.vaultCandidate,verified=providers.verified(state.scope)&&!state.currentContextPending;
     $('vaultBadge').textContent=selected?'Vault: '+selected.name+' - '+(!verified?'verify workspace first':state.directory?permission[state.vaultPermission]||'checking access':'connect to this workspace'):'Vault not selected';
     $('headerReconnect').classList.toggle('hidden',!selected||verified&&!!state.directory&&state.vaultPermission==='granted'&&!vaultRepairNeeded());
     $('headerReconnect').textContent=state.directory?'Reconnect Vault':'Connect Vault';
@@ -222,7 +222,7 @@
       exportPrefsReady=false;await ensureExportPreferences().catch(()=>{});throw error;
     }finally{exportPrefsPending--;refreshButtons();}
   }
-  function selectionBinding(){return state.scope?.observed&&state.scope.accountId&&state.scope.currentId&&state.tab?.id?
+  function selectionBinding(){return providers.verified(state.scope)&&state.scope.currentId&&state.tab?.id?
     {accountId:state.scope.accountId,conversationId:state.scope.currentId,tabId:state.tab.id}:null;}
   function sameSelectionBinding(a,b=selectionBinding()){
     return !!a&&!!b&&a.accountId===b.accountId&&a.conversationId===b.conversationId&&a.tabId===b.tabId;
@@ -352,7 +352,7 @@
       await exportChats([bound.item],{mode:'current',destination:'download',exportSelection:selection});
     }catch(error){fail(error);}
   }
-  const CHAT_URL = /^https:\/\/(chatgpt\.com|chat\.openai\.com)(\/|$)/i;
+  const providers=globalThis.ChatArchiveProviders;
   const LIST_MAX_AGE_MS = 5 * 60_000;
   // A verified workspace is the identity of a background job, not the currently
   // focused browser tab. Session storage is scoped to this browser window so
@@ -364,11 +364,11 @@
     return state.lastVerifiedWorkspace;
   }
   function canEditSync(accountId) {
-    return !!(state.scope?.observed && !state.currentContextPending && state.scope.accountId &&
+    return !!(providers.verified(state.scope) && !state.currentContextPending &&
       (!accountId || state.scope.accountId === accountId));
   }
   function rememberVerifiedWorkspace(scope, tab) {
-    if (!scope?.observed || !scope.accountId) return;
+    if (!providers.verified(scope)) return;
     const remembered = {accountId: scope.accountId, display: scope.display || 'ChatGPT workspace'};
     state.lastVerifiedWorkspace = remembered;
     if (!Number.isInteger(tab?.windowId) || !chrome.storage?.session?.set) return;
@@ -500,7 +500,7 @@
     const context=contextGeneration;
     const tab=sourceTabId?await chrome.tabs.get(sourceTabId).catch(()=>null):(await chrome.tabs.query({active:true,currentWindow:true}))[0];
     if(context!==contextGeneration)return null;
-    if (!tab || !CHAT_URL.test(tab.url || '')) {
+    if (!tab || !providers.isLegacyUrl(tab.url)) {
       if (state.port) disconnect();
       state.tab = null;
       state.scope = null;state.currentContextPending=false;
@@ -578,7 +578,7 @@
     });
     const scope = await call('CAE_STATUS', {force:force===true}, null, 25000);
     if(state.port!==activePort||context!==contextGeneration)return null; // A tab change may invalidate an in-flight reply.
-    if(!scope?.observed||!scope.accountId)throw Object.assign(Error('Workspace could not be verified.'),{code:'WORKSPACE_UNVERIFIED'});
+    if(!providers.verified(scope))throw Object.assign(Error('Workspace could not be verified.'),{code:'WORKSPACE_UNVERIFIED'});
     if (state.scope?.accountId && scope.accountId && state.scope.accountId !== scope.accountId) {
       state.chats = []; state.selected.clear();state.selectedProjects.clear(); state.listAccountId = null; state.listLoadedAt = 0; state.listSource = null;
       state.sync = null; state.syncLoaded = false; renderChats();
@@ -930,7 +930,7 @@
       if(!dir){
         picker.textContent='Choose Vault\u2026';
         $('folderStatus').textContent=state.vaultCandidate?'A saved Vault is available. Connect it to the verified workspace.':'No directory handle selected. Choose the existing Vault to reconnect it.';
-        state.vaultPermission='no_handle';button.textContent='Connect Vault';button.classList.toggle('hidden',!state.vaultCandidate);button.disabled=!state.scope?.observed||state.currentContextPending;
+        state.vaultPermission='no_handle';button.textContent='Connect Vault';button.classList.toggle('hidden',!state.vaultCandidate);button.disabled=!providers.verified(state.scope)||state.currentContextPending;
         notifyPanelPermission('no_handle');return;
       }
       picker.textContent='Change Vault\u2026';
@@ -952,8 +952,8 @@
       button.textContent=['error','unsupported'].includes(permission.state)||permission.state==='granted'&&vaultRepairNeeded()?'Reselect original Vault…':permission.state==='denied'?'Review Vault access…':'Restore Vault access…';
       const manualNeedsAccess=manualJob?.active&&manualJob.destination==='vault'&&manualJob.accountId===account;
       button.classList.toggle('hidden',permission.state==='granted'&&!vaultRepairNeeded());
-      button.disabled=!state.scope?.observed||state.currentContextPending;
-      if(manualNeedsAccess&&state.scope?.observed&&!state.currentContextPending)button.disabled=false;
+      button.disabled=!providers.verified(state.scope)||state.currentContextPending;
+      if(manualNeedsAccess&&providers.verified(state.scope)&&!state.currentContextPending)button.disabled=false;
       notifyPanelPermission(permission.state);
       if(permission.state==='granted'&&state.sync?.enabled){
         await retainGrantedVault(previous!=='granted').catch(error=>
@@ -972,12 +972,12 @@
     await refreshVaultStatus();
   }
   async function selectFolder() {
-    const active=vaultBindingActive(),previous=state.directory,account=state.scope?.observed&&!state.currentContextPending?state.scope.accountId:null,context=contextGeneration;
+    const active=vaultBindingActive(),previous=state.directory,account=providers.verified(state.scope)&&!state.currentContextPending?state.scope.accountId:null,context=contextGeneration;
     if(active&&!canReselectVault())throw Error('Pause active jobs before changing the Vault. Reselection is available when access needs repair.');
     if(SURFACE==='popup'){openPanel('settings');return;}
     if(typeof window.showDirectoryPicker!=='function')throw Error('Directory picker unavailable. Open persistent Settings in a tab.');
     const dir=await window.showDirectoryPicker({id:'chat-archive-exporter-vault',mode:'readwrite'});
-    const stillHere=()=>context===contextGeneration&&(!account||state.scope?.accountId===account&&!state.currentContextPending);
+    const stillHere=()=>context===contextGeneration&&(!account||providers.verified(state.scope,account)&&!state.currentContextPending);
     if(!stillHere())throw Error('Workspace changed during the folder picker. No binding was changed.');
     if(active||vaultBindingActive()){
       if(!account||!previous)throw Error('Verify the original workspace before repairing an active Vault.');
@@ -1014,7 +1014,7 @@
     if(account&&stillHere()){
       await ChatArchiveVault.rememberWorkspaceDirectory(account,dir);
       if(stillHere())state.directory=dir;
-    }else if(!state.scope?.observed)state.directory=null;
+    }else if(!providers.verified(state.scope))state.directory=null;
     try{await ChatArchiveVault.rememberDirectory(dir);}
     catch(e){log('WARNING: Vault folder could not be remembered: '+e.message);}
     await refreshVaultStatus();refreshLibraryControls();await discoverPreferences();
@@ -1022,15 +1022,15 @@
   }
   async function grantVaultAccess() {
     if(['error','unsupported'].includes(state.vaultPermission)||state.vaultPermission==='granted'&&vaultRepairNeeded())return selectFolder();
-    if(!state.scope?.observed||state.currentContextPending)throw Error('Reconnect ChatGPT and verify the workspace before reconnecting its Vault.');
+    if(!providers.verified(state.scope)||state.currentContextPending)throw Error('Reconnect ChatGPT and verify the workspace before reconnecting its Vault.');
     const dir=state.directory||state.vaultCandidate,account=state.scope.accountId,context=contextGeneration;
     if (!dir) throw new Error('Choose a Vault directory first.');
     if (!(await ChatArchiveVault.hasPermission(dir, true)))
       throw new Error('Vault write permission was not granted.');
-    if(context!==contextGeneration||state.scope?.accountId!==account||state.currentContextPending)throw Error('Workspace changed during Vault connection. Reconnect from the intended workspace.');
+    if(context!==contextGeneration||!providers.verified(state.scope,account)||state.currentContextPending)throw Error('Workspace changed during Vault connection. Reconnect from the intended workspace.');
     await ChatArchiveVault.rememberWorkspaceDirectory(account,dir);
     await ChatArchiveVault.rememberDirectory(dir);
-    if(context!==contextGeneration||state.scope?.accountId!==account||state.currentContextPending)throw Error('Workspace changed during Vault connection.');
+    if(context!==contextGeneration||!providers.verified(state.scope,account)||state.currentContextPending)throw Error('Workspace changed during Vault connection.');
     state.directory=dir;state.vaultCandidate=dir;
     await refreshVaultStatus();
     if(state.sync?.enabled)await retainGrantedVault();
@@ -1195,16 +1195,16 @@
   var restored=null,restoreLoading=null,restoreChecked=null,applyingRestored=false;
   function pendingRestore(){return restored&&restored.account===state.scope?.accountId&&restored.dir===state.directory;}
   async function discoverPreferences(){
-    if(!globalThis.CAEPortablePreferences||!state.scope?.observed||state.currentContextPending||!state.directory||state.vaultPermission!=='granted'||!state.syncLoaded)return;
+    if(!globalThis.CAEPortablePreferences||!providers.verified(state.scope)||state.currentContextPending||!state.directory||state.vaultPermission!=='granted'||!state.syncLoaded)return;
     const dir=state.directory,account=state.scope.accountId,display=state.scope.display;
     if(restoreLoading||restoreChecked?.dir===dir&&restoreChecked?.account===account||pendingRestore())return;
     if(state.sync?.startedAt||state.sync?.enabled||state.libraryJob?.enabled)return;
     const p=(async()=>{
       const saved=await deadline(CAEPortablePreferences.read(dir,account,display),'Saved preferences',10000);
-      if(state.directory!==dir||state.scope?.accountId!==account||state.currentContextPending)return;
+      if(state.directory!==dir||!providers.verified(state.scope,account)||state.currentContextPending)return;
       const key='cae.preferences.confirmed.'+account;
       const local=await chrome.storage.local.get(key);
-      if(state.directory!==dir||state.scope?.accountId!==account)return;
+      if(state.directory!==dir||!providers.verified(state.scope,account))return;
       restoreChecked={dir,account};
       if(local[key]||!saved.chat&&!saved.library&&!saved.export)return;
       restored={dir,account,saved};
@@ -1216,7 +1216,7 @@
     restoreLoading=p;return p;
   }
   async function persistPortable(patch){
-    if(!globalThis.CAEPortablePreferences||!state.scope?.observed||state.currentContextPending||!state.directory||state.vaultPermission!=='granted'||pendingRestore())return;
+    if(!globalThis.CAEPortablePreferences||!providers.verified(state.scope)||state.currentContextPending||!state.directory||state.vaultPermission!=='granted'||pendingRestore())return;
     const account=state.scope.accountId,dir=state.directory,display=state.scope.display;
     const saved=await CAEPortablePreferences.read(dir,account,display);
     if(!saved.chat&&!saved.hasInventory&&!state.sync?.startedAt)return;
@@ -1288,7 +1288,7 @@
   }
   async function applySync() {
     if(state.busy)throw new Error('Finish the current export first.');
-    if(!state.scope?.observed||!state.scope?.accountId)throw new Error('Connect to a verified workspace first.');
+    if(!providers.verified(state.scope)||state.currentContextPending)throw new Error('Connect to a verified workspace first.');
     if(!isSyncDirty())return;
     $('syncApply').disabled=true;
     const pending=pendingRestore()?restored:null;
@@ -1301,15 +1301,15 @@
         const dir=state.directory,scope={...state.scope},tabId=state.tab?.id,context=contextGeneration,settings=syncForm();
         if(!dir)throw new Error('Connect an existing Vault or choose a new one.');
         if(!(await ChatArchiveVault.hasPermission(dir,true)))throw new Error('Vault write permission is required.');
-        if(context!==contextGeneration||state.scope?.accountId!==scope.accountId||state.tab?.id!==tabId||state.currentContextPending)throw Error('Workspace changed before enabling monitoring.');
+        if(context!==contextGeneration||!providers.verified(state.scope,scope.accountId)||state.tab?.id!==tabId||state.currentContextPending)throw Error('Workspace changed before enabling monitoring.');
         await ChatArchiveVault.rememberWorkspaceDirectory(scope.accountId,dir);
         await ChatArchiveVault.rememberDirectory(dir);
-        if(context!==contextGeneration||state.scope?.accountId!==scope.accountId||state.currentContextPending)throw Error('Workspace changed before enabling monitoring.');
+        if(context!==contextGeneration||!providers.verified(state.scope,scope.accountId)||state.currentContextPending)throw Error('Workspace changed before enabling monitoring.');
         await syncCommand('CAE_SYNC_ENABLE',{options:{accountId:scope.accountId,display:scope.display,
           tabId,scope:settings.scope,enrollment:settings.enrollment,sources:settings.sources}});
       }
       if(pending){
-        if(state.scope?.accountId!==binding.account||state.directory!==binding.dir||state.currentContextPending)throw Error('Workspace changed during confirmation.');
+        if(!providers.verified(state.scope,binding.account)||state.directory!==binding.dir||state.currentContextPending)throw Error('Workspace changed during confirmation.');
         if(pending.saved.hasInventory){
           await ChatArchiveLibraryStore.bind(binding.account,binding.dir);
           await syncCommand('CAE_LIBRARY_JOB_RESTORE',{options:{accountId:binding.account,display:binding.display,tabId:binding.tabId,enabled:libraryDesired}});
@@ -1328,7 +1328,7 @@
   async function collectAccessDiagnostics(){
     const local={schema:'cae.connection-diagnostics.v1',extensionVersion:chrome.runtime.getManifest?.().version||'unknown',
       exportedAt:new Date().toISOString(),surface:SURFACE,online:navigator.onLine!==false,
-      workspaceVerified:!!state.scope?.observed&&!state.currentContextPending,bridgeConnected:!!state.port,
+      workspaceVerified:providers.verified(state.scope)&&!state.currentContextPending,bridgeConnected:!!state.port,
       vaultSelected:!!(state.directory||state.vaultCandidate),vaultBound:!!state.directory,
       vaultPermission:state.vaultPermission,vaultErrorName:state.vaultErrorName||null,monitoringKnown:state.syncLoaded,
       monitoringEnabled:state.syncLoaded?!!state.sync?.enabled:null,connectionCode:state.lastConnectionCode,
@@ -1384,7 +1384,7 @@
       if (state.scope) refreshSync().catch(()=>{});
     }
   });
-  window.addEventListener('focus',()=>{refreshVaultStatus().catch(()=>{});if(!state.scope?.observed&&state.autoFailures>5){state.autoFailures=0;state.nextAutoAttempt=0;}scheduleReconnect();});
+  window.addEventListener('focus',()=>{refreshVaultStatus().catch(()=>{});if(!providers.verified(state.scope)&&state.autoFailures>5){state.autoFailures=0;state.nextAutoAttempt=0;}scheduleReconnect();});
   window.addEventListener('online',()=>{state.autoFailures=0;state.nextAutoAttempt=0;scheduleReconnect(300,true);ensureExportPreferences().catch(()=>{});});
   chrome.tabs.onActivated?.addListener(info=>{
     const ownWindow=state.tab?.windowId??uiWindowId;

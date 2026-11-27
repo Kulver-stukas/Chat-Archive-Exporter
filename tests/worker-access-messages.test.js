@@ -10,7 +10,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
  accessReady:async id=>{routed.push(id);return {enabled:true};},probeAccess:async(id,e,opts)=>{probes.push({id,e,opts});},
  _state:()=>({workspaces:{}}),armTab:async()=>{},signal:async()=>{},tick:async()=>{},ALARM:'alarm'};
  const s={chrome,console,ChatArchiveManualJobs:{startup:async()=>{},resume:async()=>{},downloadChanged:async()=>{},ALARM:'manual'},ChatArchiveSync:C,ChatArchiveVaultDiagnostics:{report:async()=>({events:[]})},importScripts(){}};
- vm.runInNewContext(fs.readFileSync(__dirname+'/../worker.js','utf8'),s);
+ vm.runInContext(fs.readFileSync(__dirname+'/../worker.js','utf8'),require('./provider-bootstrap').boot(s));
  const message=chrome.runtime.onMessage.listeners[0],connect=chrome.runtime.onConnect.listeners[0];
  const invoke=(msg,sender={id:'self',url:'chrome-extension://self/panel.html'})=>new Promise(resolve=>{assert.equal(message(msg,sender,resolve),true);});
  assert.equal((await invoke({type:'CAE_VAULT_READY',accountId:'account-one'})).ok,true);assert.deepEqual(routed,['account-one']);

@@ -11,6 +11,7 @@
     reply({ ok: true, version: runningVersion });
     return false;
   });
+  const providerApi=globalThis.ChatArchiveProviders.legacyApi(()=>globalThis.ChatArchiveApi);
   const allowedTypes = new Set(['CAE_STATUS', 'CAE_LIST', 'CAE_GET_CHAT', 'CAE_CONTEXT',
     'CAE_SOURCE_START', 'CAE_SOURCE_READ', 'CAE_SOURCE_CLOSE', 'CAE_BG_PAGE', 'CAE_LIBRARY_INVENTORY', 'CAE_LIBRARY_PAGE', 'CAE_LIBRARY_CANCEL', 'CAE_ASSET_START', 'CAE_ATTACHMENT_START']);
   let sourceOwner = null;
@@ -43,10 +44,10 @@
           sourceTimer = setTimeout(() => abort.abort(), vaultTransfer ? 20 * 60_000 : 120000);
           try {
             const location = msg.type === 'CAE_ATTACHMENT_START'
-              ? await ChatArchiveApi.attachmentLocation(msg.attachment, msg.expectedAccountId || '', abort.signal)
+              ? await providerApi.attachmentLocation(msg.attachment, msg.expectedAccountId || '', abort.signal)
               : msg.type === 'CAE_ASSET_START'
-              ? await ChatArchiveApi.assetLocation(msg.fileId, msg.expectedAccountId || '', abort.signal)
-              : await ChatArchiveApi.sourceLocation(msg.fileId, msg.projectId, msg.expectedAccountId || '', abort.signal, Boolean(msg.background));
+              ? await providerApi.assetLocation(msg.fileId, msg.expectedAccountId || '', abort.signal)
+              : await providerApi.sourceLocation(msg.fileId, msg.projectId, msg.expectedAccountId || '', abort.signal, Boolean(msg.background));
             if (abort.signal.aborted || disconnected) throw new Error('Source transfer cancelled.');
             transfer = ChatArchiveSourceTransfer.createTransport({ timeoutMs: vaultTransfer ? 20 * 60_000 : 120000 });
             send(msg.id, { result: await transfer.open({ ...location, maxBytes: msg.maxBytes, signal: abort.signal }) });
@@ -64,16 +65,16 @@
           if(inventoryController)throw Error('A Library operation is already active on this connection.');
           inventoryController=new AbortController();
           try {send(msg.id,{result:msg.type==='CAE_LIBRARY_PAGE'
-            ? await ChatArchiveApi.libraryPage(msg.query||{},msg.expectedAccountId||'',inventoryController.signal)
-            : await ChatArchiveApi.libraryInventory(msg.expectedAccountId||'',p=>send(msg.id,{progress:p}),{signal:inventoryController.signal})});}
+            ? await providerApi.libraryPage(msg.query||{},msg.expectedAccountId||'',inventoryController.signal)
+            : await providerApi.libraryInventory(msg.expectedAccountId||'',p=>send(msg.id,{progress:p}),{signal:inventoryController.signal})});}
           finally {inventoryController=null;}
-        } else if (msg.type === 'CAE_STATUS') send(msg.id, { result: await ChatArchiveApi.status(Boolean(msg.force)) });
-        else if (msg.type === 'CAE_BG_PAGE') send(msg.id, { result: await ChatArchiveApi.backgroundPage(msg.query || {}, msg.expectedAccountId || '') });
+        } else if (msg.type === 'CAE_STATUS') send(msg.id, { result: await providerApi.status(Boolean(msg.force)) });
+        else if (msg.type === 'CAE_BG_PAGE') send(msg.id, { result: await providerApi.backgroundPage(msg.query || {}, msg.expectedAccountId || '') });
         else if (msg.type === 'CAE_LIST') {
-          const result = await ChatArchiveApi.listAll(state => send(msg.id, { progress: state }));
+          const result = await providerApi.listAll(state => send(msg.id, { progress: state }));
           send(msg.id, { result });
         } else if (msg.type === 'CAE_CONTEXT') {
-          send(msg.id, { result: await ChatArchiveApi.getWorkspaceSnapshot(msg.expectedAccountId || '',
+          send(msg.id, { result: await providerApi.getWorkspaceSnapshot(msg.expectedAccountId || '',
             state => send(msg.id, { progress: state }), {
               projectIds: Array.isArray(msg.projectIds) ? msg.projectIds : null,
               includePersonalization: msg.includePersonalization !== false,
@@ -82,7 +83,7 @@
             }) });
         } else if (msg.type === 'CAE_GET_CHAT') {
           if (!msg.chat?.id || !/^[a-zA-Z0-9-]{10,100}$/.test(msg.chat.id)) throw new Error('Invalid chat identifier.');
-          send(msg.id, { result: await ChatArchiveApi.getChat(msg.chat, msg.expectedAccountId, {background:Boolean(msg.background)}) });
+          send(msg.id, { result: await providerApi.getChat(msg.chat, msg.expectedAccountId, {background:Boolean(msg.background)}) });
         }
       } catch (error) { send(msg.id, { error: String(error?.message || error),
         errorCode: error?.code || null, httpStatus: error?.httpStatus || null, retryAfterMs: error?.retryAfterMs || null }); }

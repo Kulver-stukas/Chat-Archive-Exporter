@@ -16,7 +16,7 @@ const ctx={chrome,globalThis:null,Map,Set,Date,console,setTimeout,clearTimeout,c
  ChatArchivePaths:{createLayout:()=>({prefix:'ChatGPT/Workspace'})},
  ChatArchiveSyncSpool:{readMirror:async(account,prefix)=>({schema:'cae.background-mirror.v1',account,prefix,verified_at:'2026-11-18T17:00:00Z',chats:{'aaaaaaaa-1111-2222-3333-444444444444':{conversation_id:'aaaaaaaa-1111-2222-3333-444444444444',title:'Stored in Vault',path:prefix+'/stored.md'}},known:[]})},
  ChatArchiveSyncRPC:{connect:()=>({call:async()=>{remote++;return {observed:true,accountId:'workspace',display:'Workspace'}},close(){}})}};
-ctx.globalThis=ctx;vm.createContext(ctx);
+ctx.globalThis=ctx;vm.createContext(ctx);require('./provider-bootstrap').boot(ctx);
 for(const f of ['state.js','chat-list-cache.js','worker-ui.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../ui',f),'utf8'),ctx);
 const wait=()=>new Promise(r=>setTimeout(r,250));
 const send=(m,sender)=>new Promise(resolve=>{const ret=chrome.runtime.onMessage.f[0](m,sender,resolve);if(ret!==true)resolve(null);});

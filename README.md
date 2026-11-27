@@ -1,43 +1,16 @@
-# Chat Archive Exporter
+# Chat Archive Exporter — v0.2.0 rev.1 (architecture preview)
 
-[![Install from Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Install-4285F4)](https://chromewebstore.google.com/detail/chat-archive-exporter-bet/jpnelmkbbgpjfnpldfecjffhidffdpjb)
+Internal test build, functionally based on v0.1.9 Beta 2. See [architecture](ARCHITECTURE_v0.2.0.md), [release notes](RELEASE_NOTES_v0.2.0-rev1.md) and [test report](TEST_REPORT_v0.2.0-rev1.md). The public Beta 2 remains unchanged; this build is not published.
 
-**[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/chat-archive-exporter-bet/jpnelmkbbgpjfnpldfecjffhidffdpjb)** · [GitHub releases](https://github.com/Kulver-stukas/Chat-Archive-Exporter/releases) · [Privacy policy](PRIVACY.md)
+---
 
-## Current v0.1 release: v0.1.9.8 (rev.8)
+# Chat Archive Exporter — v0.1.9 Beta 2
 
-Chat Archive Exporter is an independent, local archiving extension for ChatGPT, with user-initiated Markdown and ZIP downloads, selective conversation exports, workspace-scoped Vault archives, Library and image inventory and original-file exports where available, and optional background maintenance. No external developer-operated backend or telemetry.
+Current public beta is based on the tested v0.1.9 rev.5. It is a functional local archiving tool, not a technology demonstrator. ChatGPT is the only supported provider. This independent project is not affiliated with or endorsed by OpenAI. It uses the signed-in ChatGPT web session and unofficial, changeable web endpoints. Users must ensure their use is permitted by applicable service terms and workspace policies; OpenAI's individual Terms of Use restrict automated or programmatic extraction. The official account data export remains an alternative.
 
-The completed v0.1 feature line is maintained on the `v0.1` branch. Version 0.2 is a separate architecture/refactoring line and is not part of this release. ChatGPT is the only supported provider in v0.1.
+See [Privacy Policy](PRIVACY.md), [Beta 2 release notes](release-notes/v0.1.9-beta.2.md), and [known limitations and future work](TODO_v0.1.9.md). Download the ordinary GitHub install ZIP for unpacked installation. The separately named Chrome Web Store ZIP has its manifest at the archive root. A store listing, if approved, will be a separate installation with its own extension identity and local storage.
 
-### Installation and updates
-
-- **Chrome Web Store:** use the official listing above for ordinary installation and updates. The version offered by the store can lag behind GitHub while an update is under review.
-- **GitHub:** use the [v0.1.9.8 release](https://github.com/Kulver-stukas/Chat-Archive-Exporter/releases/tag/v0.1.9.8) for the unpacked-install ZIP and the matching source ZIP. The separately named `-webstore.zip` is the submission package, with the manifest at the archive root; it is not a second installation to run beside the store copy.
-- For an existing unpacked installation, replace files in its existing directory, reload the extension and refresh ChatGPT. Preserve extension storage and Vault. Store and unpacked installations may have different extension identities and local state.
-
-Every new version published in the Chrome Web Store should have its own GitHub release, linked to the exact source commit and numerical manifest version used for the store build. GitHub publication of a beta candidate does not assert that the store has approved or distributed it. See [release procedure](RELEASING.md).
-
-### What changed since Beta 2 (rev.5)
-
-- More reliable workspace reconnection, including Settings in an ordinary browser tab.
-- Existing archive detection by verified account ID, with original workspace paths retained.
-- Portable workspace preferences, with explicit **Apply restored settings** before monitoring starts in a new browser profile.
-- Reconnect the same Vault after permission errors without resetting monitoring settings or accepted jobs; bounded access checks and clearer diagnostics.
-- Verified diagnostic downloads and a Copy diagnostics fallback.
-- Cooperative shared-local-Vault writer protection and safeguards against stale chat versions and Library inventory commits.
-
-No new browser permissions or archive format migration. The runtime is the tested rev.8 build (manifest version `0.1.9.8`, with its original revision label retained).
-
-### Limits and support
-
-Rev.8 passed 74 Node regression suites and has been tried by the maintainer in real browser use without reported problems. That does not establish exhaustive native-browser coverage. The shared-Vault guard is cooperative, requires all writers to participate, and assumes a coherent local filesystem. It is not an OS mutex or a distributed/cloud synchronization protocol. Do not run older builds as simultaneous writers against the same Vault. After an abnormal termination a stale writer claim may require manual recovery; stop all Vault writers before removing stale claims. See [rev.8 acceptance checks](UAT_v0.1.9-rev8.md) and [release notes](release-notes/v0.1.9.8.md).
-
-The extension is not affiliated with or endorsed by OpenAI. It uses the signed-in ChatGPT web session and undocumented, changeable endpoints. Use only where authorized by applicable service terms and workspace policies; the official account data export is an alternative. Some conversations, original files and native Space objects may be unavailable. Account/project Memory is outside the archive scope. See [known limitations and future work](TODO_v0.1.9.md).
-
-## Historical release documentation
-
-The following sections describe earlier revisions. Their instructions and status statements are superseded where applicable by the current release information above.
+The release is based on 71 passing Node regression suites and prior Chromium fixture checks; live browser behavior and API availability can vary. Do not assume every conversation, file, or native Space object is retrievable.
 
 ---
 

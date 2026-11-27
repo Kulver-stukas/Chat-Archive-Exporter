@@ -17,7 +17,7 @@ const box={location:{pathname:'/c/11111111-1111-1111-1111-111111111111'},
   ChatArchiveSourceTransfer:{createTransport:()=>T.createTransport({fetchImpl:async(_url,opts)=>{
     opened++;assert.equal(opts.headers.Authorization,'Bearer PRIVATE');return new Response(bytes);
   }})}};
-vm.runInNewContext(fs.readFileSync(__dirname+'/../content.js','utf8'),box);
+vm.runInContext(fs.readFileSync(__dirname+'/../content.js','utf8'),require('./provider-bootstrap').boot(box));
 assert.equal(retired,1);
 const event=()=>({listeners:[],addListener(fn){this.listeners.push(fn);}});
 function port(sender='extension'){

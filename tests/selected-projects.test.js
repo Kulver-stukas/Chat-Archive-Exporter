@@ -13,7 +13,7 @@ const sandbox={window:{},document:{cookie:''},location:{origin:'https://chatgpt.
   else throw Error('Unexpected request: '+path);
   return{ok:true,status:200,json:async()=>j,headers:{get:()=> 'application/json'}};
  }};
-vm.runInNewContext(code,sandbox);
+vm.runInContext(code,require('./provider-bootstrap').boot(sandbox));
 (async()=>{
  const ctx=await sandbox.window.ChatArchiveApi.getWorkspaceSnapshot('workspace',()=>{}, {projectIds:['g-p-22222222222222222222222222222222'],includePersonalization:false});
  assert.equal(ctx.projects.length,1);assert.equal(ctx.projects[0].gizmo.id,'g-p-22222222222222222222222222222222');

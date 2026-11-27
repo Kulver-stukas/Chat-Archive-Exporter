@@ -19,7 +19,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
      check:async(id,opt)=>{checks.push({id,...opt});holders.set(id,dirs.get(id));return {permission:'granted',retained:!!dirs.get(id),holderInstance:'instance-one'};},
      release:async id=>{released.push(id);holders.delete(id);}},
    ChatArchiveSyncRPC:{connect:()=>{apiCalls++;throw Error('Unexpected network');}}
-  };w.globalThis=w;vm.runInNewContext(source('sync'),w);return w.ChatArchiveSync;
+  };w.globalThis=w;vm.runInContext(source('sync'),require('./provider-bootstrap').boot(w));return w.ChatArchiveSync;
  }
  let c=instance();await c.startup();
  assert.deepEqual(reconciles[0],['one','two'],'rehydrate all enabled workspaces');

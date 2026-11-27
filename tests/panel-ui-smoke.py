@@ -35,6 +35,8 @@ with sync_playwright() as p:
     page.set_content(html)
     page.add_style_tag(content=(root/'styles.css').read_text())
     page.add_script_tag(content=mock)
+    for provider_file in ('contracts/provider.js','providers/chatgpt/descriptor.js','providers/registry.js'):
+        page.add_script_tag(content=(root/provider_file).read_text())
     page.add_script_tag(content=(root/'panel.js').read_text())
     page.wait_for_function("document.querySelector('#scope').textContent.includes('Workspace test')")
     assert not page.locator('#syncEnabled').is_checked()

@@ -52,6 +52,8 @@ with sync_playwright() as p:
   page.add_script_tag(content=mock)
   for fn in ['normalize.js','paths.js','sort.js']:
     page.add_script_tag(content=(root/'lib'/fn).read_text())
+  for provider_file in ('contracts/provider.js','providers/chatgpt/descriptor.js','providers/registry.js'):
+      page.add_script_tag(content=(root/provider_file).read_text())
   page.add_script_tag(content=(root/'panel.js').read_text())
   page.wait_for_function("document.querySelector('#scope').textContent.includes('Workspace one')",timeout=6000)
   page.wait_for_function("!document.querySelector('#snapshotSettings').disabled",timeout=6000)

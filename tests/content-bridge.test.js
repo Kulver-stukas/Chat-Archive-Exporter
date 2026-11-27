@@ -6,7 +6,7 @@ const sandbox={window:{addEventListener(){}},location:{pathname:'/'},document:{b
  setInterval(){},setTimeout,clearTimeout,AbortController,console,
  ChatArchiveApi:{sourceLocation:async()=>({downloadUrl:'https://chatgpt.com/backend-api/estuary/content?id=file_x&sig=TOP_SECRET',origin:'https://chatgpt.com',headers:{Authorization:'Bearer TOP_SECRET'}})},
  ChatArchiveSourceTransfer:{createTransport:()=>T.createTransport({fetchImpl:async()=>{opens++;return new Response(new Uint8Array(500000).fill(255));}})}};
-vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname,'../content.js'),'utf8'),sandbox);
+vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../content.js'),'utf8'),require('./provider-bootstrap').boot(sandbox));
 const event=()=>({callbacks:[],addListener(fn){this.callbacks.push(fn);}});
 function port(id='this-extension'){
  const pending=new Map();let seq=0;

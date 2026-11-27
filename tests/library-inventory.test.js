@@ -33,7 +33,7 @@ const sandbox={window:{},location:{origin:'https://chatgpt.com',pathname:'/libra
     assert.equal(opts.headers['ChatGPT-Account-Id'],account);
     return Response.json(responses[url]);
   }};
-vm.createContext(sandbox);
+vm.createContext(sandbox);require('./provider-bootstrap').boot(sandbox);
 for(const filename of ['lib/library-inventory.js','lib/config-inventory.js','lib/api.js'])
   vm.runInContext(fs.readFileSync(path.join(base,filename),'utf8'),sandbox);
 (async()=>{

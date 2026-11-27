@@ -1,15 +1,14 @@
 /* UI routing and cached-state observer only. Frozen archive engines are never modified. */
 (function(root){
   'use strict';
-  const U=root.CAEUIState,host=/^https:\/\/(chatgpt\.com|chat\.openai\.com)(\/|$)/i;
+  const U=root.CAEUIState,providers=root.ChatArchiveProviders;
   const bindings=new Map(),verification=new Map();let iconTimer=null,iconBusy=false,iconAgain=false;
-  // Standalone tests load this module separately; keep the same strict boundary
-  // as worker.js, including options pages that have a sender.tab.
+  // Same strict message boundary as the main worker, using the registry.
   function contextOf(sender){
     if(sender?.id!==chrome.runtime.id)return '';
     const url=String(sender.url||'').split(/[?#]/)[0];
     if(['panel.html','popup.html','options.html'].some(p=>url===chrome.runtime.getURL(p)))return 'ui';
-    if(Number.isInteger(sender.tab?.id)&&sender.frameId===0&&host.test(url)&&host.test(sender.tab.url||''))return 'chat';
+    if(Number.isInteger(sender.tab?.id)&&sender.frameId===0&&providers.isLegacyUrl(url)&&providers.isLegacyUrl(sender.tab.url||''))return 'chat';
     return '';
   }
   async function bounded(stage,work,ms=6000){
@@ -27,13 +26,13 @@
     return (time?'['+time+'] ':'')+(x?.level?x.level+': ':'')+safeLine(x?.message??x?.text??'');
   }).filter(Boolean):[];
   async function bindTab(tabId){
-    const tab=await chrome.tabs.get(tabId);if(!host.test(tab?.url||'')||tab.discarded)throw Error('Open an authenticated ChatGPT tab.');
+    const tab=await chrome.tabs.get(tabId);if(!providers.isLegacyUrl(tab?.url)||tab.discarded)throw Error('Open an authenticated ChatGPT tab.');
     const bridge=await bounded('ChatGPT bridge',()=>root.ChatArchiveTabBootstrap.ensure(tabId),8000);
     if(bridge?.ok===false)throw Object.assign(Error('ChatGPT bridge unavailable.'),{code:'BRIDGE_UNAVAILABLE'});
     const rpc=root.ChatArchiveSyncRPC.connect(tabId,25000);
     try{
       const s=await rpc.call('CAE_STATUS',{force:true});
-      if(!s.observed||!s.accountId)throw Object.assign(Error('Workspace could not be verified.'),{code:'WORKSPACE_UNVERIFIED'});
+      if(!providers.verified(s))throw Object.assign(Error('Workspace could not be verified.'),{code:'WORKSPACE_UNVERIFIED'});
       const current=await chrome.tabs.get(tabId);if(current.url!==tab.url)throw Error('Tab changed during verification.');
       const b={accountId:s.accountId,display:String(s.display||'Workspace').slice(0,150),url:tab.url,at:Date.now()};
       bindings.set(tabId,b);return b;
@@ -115,7 +114,7 @@
     return C.fromIndex(ledger,mirror,accountId,prefix);
   }
   async function ensureWidget(tabId){
-    const t=await chrome.tabs.get(tabId);if(!host.test(t?.url||'')||t.discarded)throw Error('Activate a ChatGPT tab first.');
+    const t=await chrome.tabs.get(tabId);if(!providers.isLegacyUrl(t?.url)||t.discarded)throw Error('Activate a ChatGPT tab first.');
     await chrome.scripting.executeScript({target:{tabId,frameIds:[0]},files:['ui/widget.js'],world:'ISOLATED'});
     return t;
   }
@@ -150,7 +149,7 @@
   chrome.storage.onChanged.addListener((changes,area)=>{
     if(area==='local'&&['cae.manual-status.v1','cae.library-status.v1','cae.background.v1'].some(k=>changes[k]))scheduleIcon();
     if(area==='local'&&changes[U.KEY]?.newValue?.widgetEnabled){
-      chrome.tabs.query({url:['https://chatgpt.com/*','https://chat.openai.com/*']}).then(async tabs=>{
+      chrome.tabs.query({url:providers.legacy.hostPatterns}).then(async tabs=>{
         for(const tab of tabs)if(tab.id&&!tab.discarded)await ensureWidget(tab.id).catch(()=>{});
       }).catch(()=>{});
     }
@@ -166,7 +165,7 @@
     try{
       if(message.type==='CAE_UI_BIND'&&!fromPage){
         work=chrome.tabs.get(message.tabId).then(t=>{
-          if(host.test(t.url||'')&&message.observed&&root.ChatArchiveLibraryStore.validId(message.accountId))
+          if(providers.isLegacyUrl(t.url)&&message.observed&&root.ChatArchiveLibraryStore.validId(message.accountId))
             bindings.set(t.id,{accountId:message.accountId,display:String(message.display||'Workspace').slice(0,150),url:t.url,at:Date.now()});
           return {ok:true};
         });

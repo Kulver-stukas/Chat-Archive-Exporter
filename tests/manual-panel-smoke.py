@@ -56,6 +56,8 @@ with sync_playwright() as p:
   page.evaluate('(v)=>__granted=v',granted)
   page.add_script_tag(content=(root/'lib/normalize.js').read_text())
   page.add_script_tag(content=(root/'lib/paths.js').read_text())
+  for provider_file in ('contracts/provider.js','providers/chatgpt/descriptor.js','providers/registry.js'):
+      page.add_script_tag(content=(root/provider_file).read_text())
   page.add_script_tag(content=(root/'panel.js').read_text())
   page.wait_for_function("document.querySelector('#scope').textContent.includes('Workspace test')")
   return page

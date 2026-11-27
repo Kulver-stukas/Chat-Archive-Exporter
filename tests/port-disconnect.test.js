@@ -47,7 +47,7 @@ const source = f => fs.readFileSync(path.join(base, f), 'utf8');
     setTimeout, clearTimeout, setInterval() {},
     AbortController, console
   };
-  vm.runInNewContext(source('content.js'), contentWorld);
+  vm.runInContext(source('content.js'), require('./provider-bootstrap').boot(contentWorld));
   let contentDisconnect;
   contentConnect({
     name: 'CAE_API', sender: {id: 'self'},

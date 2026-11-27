@@ -79,7 +79,7 @@ const mockFetch=async (url,options={}) => {
 };
 const sandbox={window:{},document:{cookie:''},location:{origin:'https://chatgpt.com',pathname:'/c/11111111-1111-1111-1111-111111111111'},
   fetch:mockFetch, Date, Set,Map,console,AbortSignal,URL,setTimeout,clearTimeout};
-vm.runInNewContext(apiCode,sandbox,{filename:'lib/api.js'});
+vm.runInContext(apiCode,require('./provider-bootstrap').boot(sandbox),{filename:'lib/api.js'});
 assert.equal(requested.length,0,'API does not run until invoked');
 (async()=>{
   const result=await sandbox.window.ChatArchiveApi.getWorkspaceSnapshot('business-scope');

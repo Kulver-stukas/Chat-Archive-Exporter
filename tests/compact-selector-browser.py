@@ -50,7 +50,7 @@ with sync_playwright() as p:
             page.add_style_tag(content=(root/'styles.css').read_text())
             page.add_script_tag(content='const iconmap='+json.dumps(icons)+';const srcprop=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,"src");Object.defineProperty(HTMLImageElement.prototype,"src",{get:srcprop.get,set(v){srcprop.set.call(this,iconmap[v]||v)}});if(!crypto.randomUUID)crypto.randomUUID=()=>"aaaaaaaa-bbbb-cccc-dddd-"+String(Math.random()).slice(2,14);')
             page.add_script_tag(content=fixture)
-            for f in ['lib/export-selection.js','lib/normalize.js','lib/hash.js','lib/paths.js','lib/sort.js','ui/state.js','ui/tree.js','ui/chat-list-cache.js','panel.js']:
+            for f in ['contracts/provider.js','providers/chatgpt/descriptor.js','providers/registry.js','lib/export-selection.js','lib/normalize.js','lib/hash.js','lib/paths.js','lib/sort.js','ui/state.js','ui/tree.js','ui/chat-list-cache.js','panel.js']:
                 page.add_script_tag(content=(root/f).read_text())
             page.wait_for_function("document.querySelector('#scope').textContent.includes('Test workspace') && !document.querySelector('#exportCurrent').disabled")
             page.locator('#exportCurrent').click()

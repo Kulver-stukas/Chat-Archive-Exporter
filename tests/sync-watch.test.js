@@ -7,7 +7,7 @@ const doc={visibilityState:'visible',querySelector:q=>q==='main'?{querySelector:
 const sandbox={document:doc,location:{pathname:'/c/'+id,search:''},Date:{now:()=>now},window:{addEventListener:(n,f)=>events[n]=f},
  chrome:{runtime:{id:'self',sendMessage:async x=>{messages.push(x);return {};},onMessage:{addListener:f=>enabledMessage=f}}},
  setTimeout:(fn,ms)=>{const id=++seq;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id)};
-vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../sync-watch.js'),'utf8'),sandbox);
+vm.runInContext(fs.readFileSync(path.join(__dirname,'../sync-watch.js'),'utf8'),require('./provider-bootstrap').boot(sandbox));
 assert.equal(messages.length,1);assert.equal(messages[0].type,'CAE_SYNC_HELLO');assert.equal(timers.size,0,'no timer before explicit opt-in');
 enabledMessage({type:'CAE_SYNC_WATCH',enabled:true},{id:'foreign'},()=>{});assert.equal(timers.size,0);
 enabledMessage({type:'CAE_SYNC_WATCH',enabled:true},{id:'self'},()=>{});

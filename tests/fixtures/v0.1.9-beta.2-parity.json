@@ -1,0 +1,308 @@
+{
+  "normalized": {
+    "id": "aaaaaaaa-1111-2222-3333-000000000001",
+    "title": "Parity example",
+    "created": "2026-11-02T00:00:00.000Z",
+    "updated": "2026-11-02T00:01:40.000Z",
+    "archived": false,
+    "projectId": "g-p-11111111111111111111111111111111",
+    "projectName": "Project test",
+    "gptId": "",
+    "gptName": "",
+    "source": "https://chatgpt.com/g/g-p-11111111111111111111111111111111/c/aaaaaaaa-1111-2222-3333-000000000001",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Question: $x+1$\n\n[Image omitted: binary media is not included]\n\n[Attachment: Reference.png]",
+        "textContent": "Question: $x+1$",
+        "attachments": [
+          {
+            "key": "file:file_00000000000000000000000000000001",
+            "origin": "uploaded",
+            "fileId": "file_00000000000000000000000000000001",
+            "sandboxPath": null,
+            "name": "Reference.png",
+            "mimeType": "image/png",
+            "mediaClass": "image",
+            "sizeBytes": null,
+            "messageId": "q1"
+          }
+        ],
+        "legacyOmitted": false,
+        "time": "2026-11-02T00:00:00.000Z",
+        "id": "q1",
+        "model": ""
+      },
+      {
+        "role": "thinking",
+        "content": "**Visible summary**\n\nExample",
+        "time": "2026-11-02T00:00:00.000Z",
+        "id": "t1"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "textContent": "",
+        "attachments": [
+          {
+            "key": "file:file_00000000000000000000000000000002",
+            "origin": "generated",
+            "fileId": "file_00000000000000000000000000000002",
+            "sandboxPath": null,
+            "name": "Generated illustration",
+            "mimeType": "image_asset_pointer",
+            "mediaClass": "image",
+            "sizeBytes": null,
+            "messageId": "i1"
+          }
+        ],
+        "legacyOmitted": true,
+        "selectionOnly": true,
+        "time": "2026-11-02T00:00:00.000Z",
+        "id": "i1",
+        "model": ""
+      },
+      {
+        "role": "assistant",
+        "content": "Answer and [reference](https://example.org/example).",
+        "textContent": "Answer and [reference](https://example.org/example).",
+        "attachments": [],
+        "legacyOmitted": false,
+        "time": "2026-11-02T00:00:00.000Z",
+        "id": "a1",
+        "model": "fixture-model"
+      }
+    ],
+    "warnings": [],
+    "branchNode": "a1",
+    "stats": {
+      "droppedToolMessages": 0
+    }
+  },
+  "fullMarkdown": "---\ntitle: \"Parity example\"\nprovider: chatgpt\nworkspace: \"Workspace test\"\nproject: \"Project test\"\nproject_id: \"g-p-11111111111111111111111111111111\"\narchived: false\nconversation_id: \"aaaaaaaa-1111-2222-3333-000000000001\"\nsource: \"https://chatgpt.com/g/g-p-11111111111111111111111111111111/c/aaaaaaaa-1111-2222-3333-000000000001\"\ncreated: \"2026-11-02T00:00:00.000Z\"\nupdated: \"2026-11-02T00:01:40.000Z\"\nexported: \"2026-11-12T02:00:00Z\"\n---\n\n# Parity example\n\n## Prompt:\n11/2/2026, 12:00:00 AM\n\nQuestion: $x+1$\n\n[Image omitted: binary media is not included]\n\n[Attachment: Reference.png]\n\n## Response:\n11/2/2026, 12:00:00 AM · fixture-model\n\n### Thinking (provided by ChatGPT)\n\n> **Visible summary**\n>\n> Example\n\nAnswer and [reference](https://example.org/example).\n",
+  "selectedMarkdown": "---\ntitle: \"Parity example\"\nprovider: chatgpt\nworkspace: \"Workspace test\"\nproject: \"Project test\"\nproject_id: \"g-p-11111111111111111111111111111111\"\narchived: false\nconversation_id: \"aaaaaaaa-1111-2222-3333-000000000001\"\nsource: \"https://chatgpt.com/g/g-p-11111111111111111111111111111111/c/aaaaaaaa-1111-2222-3333-000000000001\"\ncreated: \"2026-11-02T00:00:00.000Z\"\nupdated: \"2026-11-02T00:01:40.000Z\"\nexported: \"2026-11-12T02:00:00Z\"\nselection_scope: selected\nexport_categories: [\"questions\",\"answers\",\"thinking\"]\nselected_message_ids: [\"q1\",\"t1\",\"i1\",\"a1\"]\nbranch_node: \"a1\"\n---\n\n# Parity example\n\n## Prompt:\n11/2/2026, 12:00:00 AM\n\nQuestion: $x+1$\n\n## Response:\n11/2/2026, 12:00:00 AM · fixture-model\n\n### Thinking (provided by ChatGPT)\n\n> **Visible summary**\n>\n> Example\n\nAnswer and [reference](https://example.org/example).\n",
+  "zip": {
+    "filename": "Parity example [aaaaaaaa-1111-2222-3333-000000000001].zip",
+    "files": {
+      "attachments/Generated/Generated illustration.png": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+kJ3sAAAAASUVORK5CYII=",
+      "attachments/Uploaded/Reference.png": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+kJ3sAAAAASUVORK5CYII=",
+      "export-report.json": "ewogICJzY2hlbWEiOiAiY2FlLnNlbGVjdGVkLWV4cG9ydC1yZXBvcnQudjEiLAogICJwcm92aWRlciI6ICJjaGF0Z3B0IiwKICAiY29udmVyc2F0aW9uX2lkIjogImFhYWFhYWFhLTExMTEtMjIyMi0zMzMzLTAwMDAwMDAwMDAwMSIsCiAgImJyYW5jaF9ub2RlIjogImExIiwKICAid29ya3NwYWNlIjogIldvcmtzcGFjZSB0ZXN0IiwKICAiY3JlYXRlZF9hdCI6ICIyMDI2LTExLTEyVDAyOjAwOjAwLjAwMFoiLAogICJzZWxlY3Rpb24iOiB7CiAgICAicXVlc3Rpb25zIjogdHJ1ZSwKICAgICJhbnN3ZXJzIjogdHJ1ZSwKICAgICJ0aGlua2luZyI6IHRydWUsCiAgICAidXBsb2FkZWRGaWxlcyI6IHRydWUsCiAgICAiZ2VuZXJhdGVkRmlsZXMiOiB0cnVlLAogICAgImNvbXBsZXRlQ29udmVyc2F0aW9uIjogZmFsc2UsCiAgICAiY29udmVyc2F0aW9uSWQiOiAiYWFhYWFhYWEtMTExMS0yMjIyLTMzMzMtMDAwMDAwMDAwMDAxIiwKICAgICJicmFuY2hOb2RlIjogImExIiwKICAgICJtZXNzYWdlSWRzIjogWwogICAgICAicTEiLAogICAgICAidDEiLAogICAgICAiaTEiLAogICAgICAiYTEiCiAgICBdCiAgfSwKICAicGFydGlhbCI6IGZhbHNlLAogICJsaW1pdHMiOiB7CiAgICAibWF4RmlsZUJ5dGVzIjogMjYyMTQ0MDAsCiAgICAibWF4VG90YWxCeXRlcyI6IDEwNDg1NzYwMCwKICAgICJtYXhGaWxlcyI6IDIwMDAKICB9LAogICJjb3VudHMiOiB7CiAgICAic2F2ZWQiOiAyCiAgfSwKICAicmVjZWl2ZWRfYnl0ZXMiOiAxMzYsCiAgInN0b3JlZF9ieXRlcyI6IDEzNiwKICAiZmlsZXMiOiBbCiAgICB7CiAgICAgICJrZXkiOiAiZmlsZTpmaWxlXzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAxIiwKICAgICAgImtleXMiOiBbCiAgICAgICAgImZpbGU6ZmlsZV8wMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMSIKICAgICAgXSwKICAgICAgIm5hbWUiOiAiUmVmZXJlbmNlLnBuZyIsCiAgICAgICJvcmlnaW4iOiAidXBsb2FkZWQiLAogICAgICAiZmlsZUlkIjogImZpbGVfMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDEiLAogICAgICAibWVzc2FnZUlkIjogInExIiwKICAgICAgIm1lc3NhZ2VJZHMiOiBbCiAgICAgICAgInExIgogICAgICBdLAogICAgICAic3RhdHVzIjogInNhdmVkIiwKICAgICAgImxvY2FsUGF0aCI6ICJhdHRhY2htZW50cy9VcGxvYWRlZC9SZWZlcmVuY2UucG5nIiwKICAgICAgImJ5dGVzIjogNjgsCiAgICAgICJzaGEyNTYiOiAiMjY2YmRhYzFlMDgyNmE3YWRhNDZmZTg0OTU3ODVlNGE3ZGJlZGQ5NTRiNWJlNjQzOGY5MGMwZjZlZDFjYTYyZiIsCiAgICAgICJleHBlY3RlZEJ5dGVzIjogbnVsbCwKICAgICAgInNpemVNYXRjaGVzIjogbnVsbAogICAgfSwKICAgIHsKICAgICAgImtleSI6ICJmaWxlOmZpbGVfMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDIiLAogICAgICAia2V5cyI6IFsKICAgICAgICAiZmlsZTpmaWxlXzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAyIgogICAgICBdLAogICAgICAibmFtZSI6ICJHZW5lcmF0ZWQgaWxsdXN0cmF0aW9uIiwKICAgICAgIm9yaWdpbiI6ICJnZW5lcmF0ZWQiLAogICAgICAiZmlsZUlkIjogImZpbGVfMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDIiLAogICAgICAibWVzc2FnZUlkIjogImkxIiwKICAgICAgIm1lc3NhZ2VJZHMiOiBbCiAgICAgICAgImkxIgogICAgICBdLAogICAgICAic3RhdHVzIjogInNhdmVkIiwKICAgICAgImxvY2FsUGF0aCI6ICJhdHRhY2htZW50cy9HZW5lcmF0ZWQvR2VuZXJhdGVkIGlsbHVzdHJhdGlvbi5wbmciLAogICAgICAiYnl0ZXMiOiA2OCwKICAgICAgInNoYTI1NiI6ICIyNjZiZGFjMWUwODI2YTdhZGE0NmZlODQ5NTc4NWU0YTdkYmVkZDk1NGI1YmU2NDM4ZjkwYzBmNmVkMWNhNjJmIiwKICAgICAgImV4cGVjdGVkQnl0ZXMiOiBudWxsLAogICAgICAic2l6ZU1hdGNoZXMiOiBudWxsCiAgICB9CiAgXQp9Cg==",
+      "Parity example [aaaaaaaa-1111-2222-3333-000000000001].md": "LS0tCnRpdGxlOiAiUGFyaXR5IGV4YW1wbGUiCnByb3ZpZGVyOiBjaGF0Z3B0CndvcmtzcGFjZTogIldvcmtzcGFjZSB0ZXN0Igpwcm9qZWN0OiAiUHJvamVjdCB0ZXN0Igpwcm9qZWN0X2lkOiAiZy1wLTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExIgphcmNoaXZlZDogZmFsc2UKY29udmVyc2F0aW9uX2lkOiAiYWFhYWFhYWEtMTExMS0yMjIyLTMzMzMtMDAwMDAwMDAwMDAxIgpzb3VyY2U6ICJodHRwczovL2NoYXRncHQuY29tL2cvZy1wLTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExL2MvYWFhYWFhYWEtMTExMS0yMjIyLTMzMzMtMDAwMDAwMDAwMDAxIgpjcmVhdGVkOiAiMjAyNi0xMS0wMlQwMDowMDowMC4wMDBaIgp1cGRhdGVkOiAiMjAyNi0xMS0wMlQwMDowMTo0MC4wMDBaIgpleHBvcnRlZDogIjIwMjYtMTEtMTJUMDI6MDA6MDAuMDAwWiIKc2VsZWN0aW9uX3Njb3BlOiBzZWxlY3RlZApleHBvcnRfY2F0ZWdvcmllczogWyJxdWVzdGlvbnMiLCJhbnN3ZXJzIiwidGhpbmtpbmciLCJ1cGxvYWRlZEZpbGVzIiwiZ2VuZXJhdGVkRmlsZXMiXQpzZWxlY3RlZF9tZXNzYWdlX2lkczogWyJxMSIsInQxIiwiaTEiLCJhMSJdCmJyYW5jaF9ub2RlOiAiYTEiCi0tLQoKIyBQYXJpdHkgZXhhbXBsZQoKIyMgUHJvbXB0OgoxMS8yLzIwMjYsIDEyOjAwOjAwIEFNCgpRdWVzdGlvbjogJHgrMSQKCiMjIyBVcGxvYWRlZCBmaWxlcwoKLSBbUmVmZXJlbmNlLnBuZ10oPGF0dGFjaG1lbnRzL1VwbG9hZGVkL1JlZmVyZW5jZS5wbmc+KQoKIyMgUmVzcG9uc2U6CjExLzIvMjAyNiwgMTI6MDA6MDAgQU0gwrcgZml4dHVyZS1tb2RlbAoKIyMjIFRoaW5raW5nIChwcm92aWRlZCBieSBDaGF0R1BUKQoKPiAqKlZpc2libGUgc3VtbWFyeSoqCj4KPiBFeGFtcGxlCgpBbnN3ZXIgYW5kIFtyZWZlcmVuY2VdKGh0dHBzOi8vZXhhbXBsZS5vcmcvZXhhbXBsZSkuCgojIyMgR2VuZXJhdGVkIGZpbGVzCgotIFtHZW5lcmF0ZWQgaWxsdXN0cmF0aW9uXSg8YXR0YWNobWVudHMvR2VuZXJhdGVkL0dlbmVyYXRlZCUyMGlsbHVzdHJhdGlvbi5wbmc+KQo="
+    }
+  },
+  "vault": {
+    "ChatGPT/.chat-archive/index.json": "ewogICJzY2hlbWEiOiAiY2FlLnZhdWx0LWluZGV4LnYxIiwKICAiY3JlYXRlZF9hdCI6ICIyMDI2LTExLTEyVDAyOjAwOjA0LjQwMFoiLAogICJ1cGRhdGVkX2F0IjogIjIwMjYtMTEtMTJUMDI6MDA6MDQuNDAwWiIsCiAgInNvdXJjZXMiOiB7fSwKICAiY2hhdHMiOiB7fSwKICAibWV0YWRhdGEiOiB7CiAgICAid29ya3NwYWNlLW9uZXxDaGF0R1BUL1dvcmtzcGFjZSB0ZXN0L193b3Jrc3BhY2VfY29uZmlndXJhdGlvbi5qc29uIjogewogICAgICAicGF0aCI6ICJDaGF0R1BUL1dvcmtzcGFjZSB0ZXN0L193b3Jrc3BhY2VfY29uZmlndXJhdGlvbi5qc29uIiwKICAgICAgInNoYTI1NiI6ICJhZTcwOGU3MWM3YTU4NDEzMTAwODNlZmZlMzVkMzdmMzQ3M2M5ZDY4OTZkM2EwNWMxOWEzMmVkNDc1MjEzOTUyIiwKICAgICAgImJ5dGVzIjogMTgxNiwKICAgICAgImxvY2FsX2xhc3RfbW9kaWZpZWQiOiA2LAogICAgICAic2F2ZWRfYXQiOiAiMjAyNi0xMS0xMlQwMjowMDowNC40MDBaIgogICAgfSwKICAgICJ3b3Jrc3BhY2Utb25lfENoYXRHUFQvV29ya3NwYWNlIHRlc3QvX2FyY2hpdmVfcmVwb3J0Lm1kIjogewogICAgICAicGF0aCI6ICJDaGF0R1BUL1dvcmtzcGFjZSB0ZXN0L19hcmNoaXZlX3JlcG9ydC5tZCIsCiAgICAgICJzaGEyNTYiOiAiNWNjYTA0YmEwOGE2ODNkNWRlMGY3YTc2ZmJmMzZkZGIyNGU0ODUwN2JhNzAwOTNhMDVjN2U2ODI3NTVmMzdmMyIsCiAgICAgICJieXRlcyI6IDg5NCwKICAgICAgImxvY2FsX2xhc3RfbW9kaWZpZWQiOiAxMCwKICAgICAgInNhdmVkX2F0IjogIjIwMjYtMTEtMTJUMDI6MDA6MDQuNDAwWiIKICAgIH0KICB9Cn0K",
+    "ChatGPT/Workspace test/_archive_report.md": "IyBBcmNoaXZlIHJlcG9ydAoKRXhwb3J0ZXIgdmVyc2lvbjogMC4xLjYuOQoKQ2FwdHVyZWQ6IDIwMjYtMTEtMTJUMDI6MDA6MDBaCgpTZWxlY3Rpb246IGFsbF9wcm9qZWN0cwoKUHJvamVjdHMgaW5jbHVkZWQ6IDAKClJlcXVlc3RlZCBwcm9qZWN0IG1ldGFkYXRhIGNvbXBsZXRlOiB5ZXMKClBlcnNvbmFsaXphdGlvbjogdW5hdmFpbGFibGUKCiMjIENoYXQgZXhwb3J0CgpgYGBqc29uCnsKICAic2F2ZWQiOiAxLAogICJza2lwcGVkIjogMCwKICAiZmFpbGVkIjogMCwKICAiY29uZmxpY3QiOiAwLAogICJkZWZlcnJlZCI6IDAKfQpgYGAKCiMjIFByb2plY3QgU291cmNlcwoKYGBganNvbgp7CiAgImNvdW50cyI6IHsKICAgICJzYXZlZCI6IDAsCiAgICAic2tpcHBlZCI6IDAsCiAgICAiY2hhbmdlZCI6IDAsCiAgICAiY29uZmxpY3QiOiAwLAogICAgImZhaWxlZCI6IDAsCiAgICAiY2FuY2VsbGVkIjogMAogIH0sCiAgInJlY2VpdmVkX2J5dGVzIjogMCwKICAic3RvcmVkX2J5dGVzIjogMCwKICAibGltaXRzIjogewogICAgIm1heEZpbGVCeXRlcyI6IDUzNjg3MDkxMiwKICAgICJtYXhUb3RhbEJ5dGVzIjogMTA3Mzc0MTgyNCwKICAgICJkZWxheU1zIjogNzUwCiAgfQp9CmBgYAoKU0hBLTI1NiByZWNvcmRzIHRoZSBkb3dubG9hZGVkIGJ5dGVzLiBJdCBpcyBub3QgcHJvb2Ygb2YgZXF1YWxpdHkgdG8gYW4gdW5hdmFpbGFibGUgcmVtb3RlIG9yaWdpbmFsLgpDb25uZWN0b3Igc291cmNlcyBhcmUgc25hcHNob3RzIG9mIHRoZSByZXByZXNlbnRhdGlvbiBzdXBwbGllZCBieSBDaGF0R1BULCBub3QgYSBmcmVzaCBHb29nbGUgRHJpdmUgZXhwb3J0LgoKIyMjIFBlci1zb3VyY2UgcmVzdWx0cwoKYGBganNvbgpbXQpgYGAKCiMjIFdhcm5pbmdzCgotIE5vbmUgcmVwb3J0ZWQK",
+    "ChatGPT/Workspace test/_workspace_configuration.json": "ewogICJzY2hlbWEiOiAiY2FlLndvcmtzcGFjZS1jb25maWd1cmF0aW9uLnYxIiwKICAiY2FwdHVyZWRfYXQiOiAiMjAyNi0xMS0xMlQwMjowMDowMFoiLAogICJhY3RpdmVfc2NvcGUiOiB7CiAgICAiYWNjb3VudF9pZCI6ICJ3b3Jrc3BhY2Utb25lIiwKICAgICJzY29wZV90eXBlIjogInVua25vd24iCiAgfSwKICAiaWRlbnRpdHkiOiBudWxsLAogICJzZWxlY3Rpb24iOiAidW5rbm93biIsCiAgInByb2plY3RzIjogewogICAgInN0YXR1cyI6ICJjb21wbGV0ZSIsCiAgICAiY29tcGxldGUiOiB0cnVlLAogICAgIml0ZW1zIjogW10KICB9LAogICJjdXN0b21fZ3B0cyI6IHsKICAgICJzdGF0dXMiOiAib2JzZXJ2ZWRfb25seSIsCiAgICAiY29tcGxldGUiOiBmYWxzZSwKICAgICJjb3ZlcmFnZSI6ICJvYnNlcnZlZF9jb252ZXJzYXRpb25zIiwKICAgICJpdGVtcyI6IFtdCiAgfSwKICAicGx1Z2lucyI6IHsKICAgICJzdGF0dXMiOiAibm90X2VudW1lcmF0ZWQiLAogICAgImNvbXBsZXRlIjogZmFsc2UsCiAgICAiaXRlbXMiOiBudWxsCiAgfSwKICAic2tpbGxzIjogewogICAgInN0YXR1cyI6ICJub3RfZW51bWVyYXRlZCIsCiAgICAiY29tcGxldGUiOiBmYWxzZSwKICAgICJraW5kIjogImJ1bmRsZWRfaW5fZXhwbGljaXRseV9pbnN0YWxsZWRfcGx1Z2lucyIsCiAgICAiaXRlbXMiOiBudWxsCiAgfSwKICAic3RhbmRhbG9uZV9za2lsbHMiOiB7CiAgICAic3RhdHVzIjogIm5vdF9lbnVtZXJhdGVkIiwKICAgICJjb21wbGV0ZSI6IGZhbHNlLAogICAgIml0ZW1zIjogbnVsbAogIH0sCiAgInNjaGVkdWxlcyI6IHsKICAgICJzdGF0dXMiOiAibm90X2VudW1lcmF0ZWQiLAogICAgImNvbXBsZXRlIjogZmFsc2UsCiAgICAiaXRlbXMiOiBudWxsCiAgfSwKICAiY29ubmVjdGVkX2FwcF9zY29wZXMiOiB7CiAgICAic3RhdHVzIjogInByb2plY3RfY29ubmVjdG9yX3Njb3Blc19vbmx5IiwKICAgICJjb21wbGV0ZSI6IHRydWUsCiAgICAiaXRlbXMiOiBbXQogIH0sCiAgIm5vdGVzIjogWwogICAgIlRoZSBzbmFwc2hvdCBjb3ZlcnMgb25seSB0aGUgdmVyaWZpZWQgYWN0aXZlIENoYXRHUFQgd29ya3NwYWNlLiBObyBvdGhlciBhY2NvdW50IGlzIHF1ZXJpZWQuIiwKICAgICJJbnN0YWxsZWQgUGx1Z2lucyBhcmUgZXhwbGljaXQgdXNlciBpbnN0YWxsYXRpb25zIG9ubHkuIEJ1bmRsZWQgU2tpbGxzIGFyZSByZWZlcmVuY2VzLCBub3QgZXhwb3J0ZWQgc2tpbGwgY29udGVudHMuIiwKICAgICJHTE9CQUwgZW50cmllcyBiZWxvbmcgdG8gdGhlIGN1cnJlbnQgdXNlcjsgV09SS1NQQUNFIGVudHJpZXMgYmVsb25nIHRvIHRoZSBhY3RpdmUgd29ya3NwYWNlLiBOZWl0aGVyIHByb3ZlcyBPQXV0aCBhdXRob3JpemF0aW9uLiIsCiAgICAiR1BUIGJvb3RzdHJhcCBpcyBub3QgYSBjb21wbGV0ZSBvd25lZC1HUFQgY2F0YWxvZy4gU3RhbmRhbG9uZSBpbnN0YWxsZWQgU2tpbGxzIHdlcmUgbm90IGVudW1lcmF0ZWQuIiwKICAgICJQcm9qZWN0IGNvbm5lY3RvciBzY29wZXMgZGVzY3JpYmUgcHJvamVjdCBTb3VyY2VzOyByZW1vdGUgcHJvdmlkZXIgZGVzdGluYXRpb25zIHdlcmUgbm90IGVudW1lcmF0ZWQuIiwKICAgICJTY2hlZHVsZXMgYXJlIGNvbmZpZ3VyYXRpb24gc25hcHNob3RzLCBub3QgZXhlY3V0aW9uIGhpc3Rvcmllczsgc3VnZ2VzdGVkIHRhc2tzIGFyZSBleGNsdWRlZC4iLAogICAgIk5vIGFjY291bnQgb3IgUHJvamVjdCBNZW1vcnksIHRva2VuLCBzaWduZWQgc291cmNlIFVSTCwgZnVsbCBQbHVnaW4gbWFuaWZlc3Qgb3IgZXh0ZXJuYWwgcHJvdmlkZXIgZGF0YSBpcyBhcmNoaXZlZC4iCiAgXQp9Cg==",
+    "ChatGPT/Workspace test/.workspace.json": "ewogICJzY2hlbWEiOiAiY2FlLndvcmtzcGFjZS1jaGF0cy52MSIsCiAgImFjY291bnRfaWQiOiAid29ya3NwYWNlLW9uZSIsCiAgIndvcmtzcGFjZSI6ICJXb3Jrc3BhY2UgdGVzdCIsCiAgImNyZWF0ZWRfYXQiOiAiMjAyNi0xMS0xMlQwMjowMDowMC4wMDBaIiwKICAidXBkYXRlZF9hdCI6ICIyMDI2LTExLTEyVDAyOjAwOjAwLjAwMFoiLAogICJjaGF0cyI6IHsKICAgICJhYWFhYWFhYS0xMTExLTIyMjItMzMzMy0wMDAwMDAwMDAwMDEiOiB7CiAgICAgICJjb252ZXJzYXRpb25faWQiOiAiYWFhYWFhYWEtMTExMS0yMjIyLTMzMzMtMDAwMDAwMDAwMDAxIiwKICAgICAgInBhdGgiOiAiQ2hhdEdQVC9Xb3Jrc3BhY2UgdGVzdC9Qcm9qZWN0IHRlc3QvUGFyaXR5IGV4YW1wbGUgW2FhYWFhYWFhLTExMTEtMjIyMi0zMzMzLTAwMDAwMDAwMDAwMV0ubWQiLAogICAgICAidGl0bGUiOiAiUGFyaXR5IGV4YW1wbGUiLAogICAgICAicHJvamVjdF9pZCI6ICJnLXAtMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTEiLAogICAgICAiYXJjaGl2ZWQiOiBmYWxzZSwKICAgICAgImdwdF9pZCI6ICIiLAogICAgICAiZ3B0X25hbWUiOiBudWxsLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTAyVDAwOjAxOjQwLjAwMFoiLAogICAgICAidXBkYXRlZF9tcyI6IDE3OTM1Nzc3MDAwMDAsCiAgICAgICJleHBvcnRlZCI6ICIyMDI2LTExLTEyVDAyOjAwOjAwLjAwMFoiLAogICAgICAibGlzdGVkX3VwZGF0ZWRfbXMiOiAxNzkzNTc3NzAwMDAwLAogICAgICAic2hhMjU2IjogIjQ4MjM0ZTVmNzhjMTc3YTE4ZDEwNmVmYjRiMTVhMDY0ZWI5OThkZGRkYzM2ZWM4NGIzMjA3YTI2OWNmMDRjMjQiLAogICAgICAiYnl0ZXMiOiA3NjcsCiAgICAgICJzYXZlZF9hdCI6ICIyMDI2LTExLTEyVDAyOjAwOjAwLjAwMFoiLAogICAgICAiY3JlYXRlZCI6ICIyMDI2LTExLTAyVDAwOjAwOjAwLjAwMFoiCiAgICB9CiAgfQp9Cg==",
+    "ChatGPT/Workspace test/Project test/Parity example [aaaaaaaa-1111-2222-3333-000000000001].md": "LS0tCnRpdGxlOiAiUGFyaXR5IGV4YW1wbGUiCnByb3ZpZGVyOiBjaGF0Z3B0CndvcmtzcGFjZTogIldvcmtzcGFjZSB0ZXN0Igpwcm9qZWN0OiAiUHJvamVjdCB0ZXN0Igpwcm9qZWN0X2lkOiAiZy1wLTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExIgphcmNoaXZlZDogZmFsc2UKY29udmVyc2F0aW9uX2lkOiAiYWFhYWFhYWEtMTExMS0yMjIyLTMzMzMtMDAwMDAwMDAwMDAxIgpzb3VyY2U6ICJodHRwczovL2NoYXRncHQuY29tL2cvZy1wLTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExL2MvYWFhYWFhYWEtMTExMS0yMjIyLTMzMzMtMDAwMDAwMDAwMDAxIgpjcmVhdGVkOiAiMjAyNi0xMS0wMlQwMDowMDowMC4wMDBaIgp1cGRhdGVkOiAiMjAyNi0xMS0wMlQwMDowMTo0MC4wMDBaIgpleHBvcnRlZDogIjIwMjYtMTEtMTJUMDI6MDA6MDAuMDAwWiIKLS0tCgojIFBhcml0eSBleGFtcGxlCgojIyBQcm9tcHQ6CjExLzIvMjAyNiwgMTI6MDA6MDAgQU0KClF1ZXN0aW9uOiAkeCsxJAoKW0ltYWdlIG9taXR0ZWQ6IGJpbmFyeSBtZWRpYSBpcyBub3QgaW5jbHVkZWRdCgpbQXR0YWNobWVudDogUmVmZXJlbmNlLnBuZ10KCiMjIFJlc3BvbnNlOgoxMS8yLzIwMjYsIDEyOjAwOjAwIEFNIMK3IGZpeHR1cmUtbW9kZWwKCiMjIyBUaGlua2luZyAocHJvdmlkZWQgYnkgQ2hhdEdQVCkKCj4gKipWaXNpYmxlIHN1bW1hcnkqKgo+Cj4gRXhhbXBsZQoKQW5zd2VyIGFuZCBbcmVmZXJlbmNlXShodHRwczovL2V4YW1wbGUub3JnL2V4YW1wbGUpLgo="
+  },
+  "catalog": {
+    "items": [
+      {
+        "id": "file:file_00000000000000000000000000000002",
+        "file_id": "file_00000000000000000000000000000002",
+        "name": "Notes.md",
+        "mime_type": "text/plain",
+        "file_size_bytes": 3,
+        "created_at": "2026-11-01T12:00:00Z",
+        "updated_at": null,
+        "file_upload_time": null,
+        "sources": [
+          "library"
+        ],
+        "gallery_ids": [],
+        "library_locations": [
+          {
+            "library_id": "libfile_00000000000000000002",
+            "parent_directory_id": "libdir_root",
+            "folder_path": null,
+            "access_kind": null,
+            "origination_thread_id": null,
+            "origination_message_id": null
+          }
+        ],
+        "gallery": null,
+        "library_file_category": null,
+        "library_artifact_type": null,
+        "image_gen_attribution": false,
+        "media_class": "file",
+        "format_class": "text",
+        "origin": "unknown",
+        "origin_status": "unavailable",
+        "origin_evidence": [],
+        "use_case": null,
+        "placements": [
+          {
+            "type": "library",
+            "library_file_id": "libfile_00000000000000000002",
+            "directory_id": "libdir_root",
+            "folder_path": null,
+            "ui_url": null,
+            "url_status": "not_observed"
+          },
+          {
+            "type": "project_source",
+            "project_id": "g-p-11111111111111111111111111111111",
+            "project_name": "Project test",
+            "source_record_id": "source_2",
+            "file_id": "file_00000000000000000000000000000002",
+            "library_file_id": "libfile_00000000000000000002"
+          }
+        ],
+        "contexts": [
+          "library",
+          "project_source"
+        ]
+      },
+      {
+        "id": "file:file_00000000000000000000000000000001",
+        "file_id": "file_00000000000000000000000000000001",
+        "name": "Reference.png",
+        "mime_type": "image/png",
+        "file_size_bytes": 3,
+        "created_at": "2026-11-01T12:00:00Z",
+        "updated_at": null,
+        "file_upload_time": null,
+        "sources": [
+          "library",
+          "images"
+        ],
+        "gallery_ids": [
+          "s_00000000000000000001"
+        ],
+        "library_locations": [
+          {
+            "library_id": "libfile_00000000000000000001",
+            "parent_directory_id": "libdir_root",
+            "folder_path": null,
+            "access_kind": null,
+            "origination_thread_id": null,
+            "origination_message_id": null
+          }
+        ],
+        "gallery": {
+          "title": "Image 1",
+          "width": null,
+          "height": null,
+          "created_at": "2026-11-01T12:00:00Z",
+          "conversation_id": null
+        },
+        "library_file_category": null,
+        "library_artifact_type": null,
+        "image_gen_attribution": false,
+        "media_class": "image",
+        "format_class": "image",
+        "origin": "unknown",
+        "origin_status": "conflicting",
+        "origin_evidence": [
+          "images_gallery",
+          "use_case:my_files"
+        ],
+        "use_case": "my_files",
+        "placements": [
+          {
+            "type": "library",
+            "library_file_id": "libfile_00000000000000000001",
+            "directory_id": "libdir_root",
+            "folder_path": null,
+            "ui_url": null,
+            "url_status": "not_observed"
+          },
+          {
+            "type": "generated_image_gallery",
+            "gallery_id": "s_00000000000000000001",
+            "conversation_id": null,
+            "ui_url": null,
+            "url_status": "not_observed"
+          }
+        ],
+        "contexts": [
+          "library",
+          "generated_image_gallery"
+        ]
+      },
+      {
+        "id": "file:file_00000000000000000000000000000003",
+        "file_id": "file_00000000000000000000000000000003",
+        "name": "file:file_00000000000000000000000000000003",
+        "mime_type": null,
+        "format_class": "other",
+        "media_class": "file",
+        "file_size_bytes": null,
+        "created_at": null,
+        "updated_at": null,
+        "file_upload_time": null,
+        "source_only": true,
+        "origin": "unknown",
+        "origin_status": "insufficient_evidence",
+        "origin_evidence": [],
+        "sources": [
+          "project_source"
+        ],
+        "gallery_ids": [],
+        "library_locations": [],
+        "gallery": null,
+        "use_case": null,
+        "placements": [
+          {
+            "type": "project_source",
+            "project_id": "g-p-11111111111111111111111111111111",
+            "project_name": "Project test",
+            "source_record_id": "source_3",
+            "file_id": "file_00000000000000000000000000000003",
+            "library_file_id": "libfile_00000000000000000003"
+          }
+        ],
+        "contexts": [
+          "project_source"
+        ]
+      }
+    ],
+    "folders": [],
+    "summary": {
+      "total": 2,
+      "library_files": 2,
+      "images_gallery": 1,
+      "images_unique": 1,
+      "image_only": 0,
+      "folders": 0,
+      "by_origin": {
+        "uploaded": 0,
+        "generated": 0,
+        "unknown": 2
+      },
+      "by_media": {
+        "image": 1,
+        "file": 1
+      },
+      "groups": {
+        "unknown/file": 1,
+        "unknown/image": 1
+      },
+      "by_context": {
+        "library": 2,
+        "project_source": 2,
+        "conversation_message": 0,
+        "generated_image_gallery": 1
+      },
+      "source_only": 1,
+      "message_references": 0
+    },
+    "message_references": [],
+    "project_source_refs": {
+      "matched": 1,
+      "unmatched": [
+        {
+          "type": "project_source",
+          "project_id": "g-p-11111111111111111111111111111111",
+          "project_name": "Project test",
+          "source_record_id": "source_3",
+          "file_id": "file_00000000000000000000000000000003",
+          "library_file_id": "libfile_00000000000000000003"
+        }
+      ],
+      "source_only_records": 1
+    }
+  }
+}
