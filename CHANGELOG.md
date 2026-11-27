@@ -1,3 +1,12 @@
+# Changelog
+
+## v0.1.9.8 — v0.1 maintenance baseline (2026-11-27)
+
+- Publish the tested rev.8 source and installation packages on GitHub, incorporating the rev.6–8 fixes listed below.
+- Record the Chrome Web Store listing and the one-release-per-store-version policy.
+- Retain the beta designation, numerical manifest version, runtime revision label and existing permission scope. No runtime changes from the tested rev.8 commit.
+- Keep the v0.1 maintenance line separate from the v0.2 architecture work. Store approval or availability of this specific version is not established by the GitHub release.
+
 ## v0.1.9 rev.8 — Vault reselect and shared local writer guard (test)
 
 - Reselect the exact original Vault while monitoring remains enabled; verify native entry identity, retain enrollment date, queue, policies and same-folder job bindings. Reject different folders during active work.
