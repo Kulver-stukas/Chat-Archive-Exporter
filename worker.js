@@ -31,6 +31,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const L=globalThis.ChatArchiveLibraryJobs;
     const actions={
       CAE_LIBRARY_JOB_START:()=>L.start(message.options||{}),
+      CAE_LIBRARY_JOB_RESTORE:()=>L.restore(message.options||{}),
       CAE_LIBRARY_JOB_STATUS:()=>L.inspect(message.accountId,message.withCatalog!==false),
       CAE_LIBRARY_JOB_STOP:()=>L.stop(message.accountId),
       CAE_LIBRARY_JOB_MONITOR:()=>L.monitor(message.accountId,message.enabled===true),
