@@ -1,5 +1,5 @@
 importScripts('lib/export-selection.js','lib/export-preferences.js','lib/normalize.js','lib/config-inventory.js','lib/hash.js','lib/paths.js','lib/meta.js','lib/sources.js',
-  'lib/vault.js','lib/vault-transfer.js','lib/sync-policy.js','lib/sync-spool.js','lib/sync-rpc.js','lib/vault-context.js','lib/vault-diagnostics.js','lib/sync.js','lib/tab-bootstrap.js','lib/manual-store.js','lib/manual-attachments.js','lib/manual-jobs.js',
+  'lib/vault.js','lib/workspace-activity.js','lib/vault-transfer.js','lib/sync-policy.js','lib/sync-spool.js','lib/sync-rpc.js','lib/vault-context.js','lib/vault-diagnostics.js','lib/sync.js','lib/tab-bootstrap.js','lib/manual-store.js','lib/manual-attachments.js','lib/manual-jobs.js',
   'lib/library-inventory.js','lib/library-policy.js','lib/library-store.js','lib/library-vault.js','lib/library-jobs.js');
 
 /* MessageSender.tab also exists for an extension options page in a normal tab.
@@ -32,6 +32,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const actions={
       CAE_LIBRARY_JOB_START:()=>L.start(message.options||{}),
       CAE_LIBRARY_JOB_RESTORE:()=>L.restore(message.options||{}),
+      CAE_LIBRARY_JOB_LOAD_VAULT:()=>L.hydrate(message.options||{}),
+      CAE_LIBRARY_JOB_REFRESH_ONCE:()=>L.refreshOnce(message.options||{}),
       CAE_LIBRARY_JOB_STATUS:()=>L.inspect(message.accountId,message.withCatalog!==false),
       CAE_LIBRARY_JOB_STOP:()=>L.stop(message.accountId),
       CAE_LIBRARY_JOB_MONITOR:()=>L.monitor(message.accountId,message.enabled===true),

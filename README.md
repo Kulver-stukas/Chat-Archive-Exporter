@@ -6,7 +6,7 @@
 
 ## Current published v0.1 release: v0.1.9.8 (rev.8)
 
-This branch contains the v0.1.9.9 writer-recovery beta candidate (issue #6), pending UAT. For leftover claims, use Tools → Diagnostics → Review writer claims; confirm all other writers have stopped before Clear reviewed locks. See `UAT_v0.1.9.9.md`. No automatic foreign-claim takeover by age. Future storage separation: issue #7 and `TODO_v0.1.9.md`.
+This branch contains the v0.1.9.10 beta candidate, pending UAT: writer recovery (#6), saved Library and terminal activity restoration across browser profiles (#8). See UAT_v0.1.9.10.md. For leftover claims, use Tools → Diagnostics → Review writer claims; confirm all other writers have stopped before Clear reviewed locks. See `UAT_v0.1.9.9.md`. No automatic foreign-claim takeover by age. Future storage separation: issue #7 and `TODO_v0.1.9.md`.
 
 Chat Archive Exporter is an independent, local archiving extension for ChatGPT, with user-initiated Markdown and ZIP downloads, selective conversation exports, workspace-scoped Vault archives, Library and image inventory and original-file exports where available, and optional background maintenance. No external developer-operated backend or telemetry.
 

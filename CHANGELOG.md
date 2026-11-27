@@ -1,3 +1,7 @@
+## v0.1.9.10 — shared Workspace inventory and activity (beta candidate)
+
+- Issue #8: restore existing Library inventory from Vault before optional API metadata update; share terminal operation summaries, not active local jobs. No new permissions or index migration.
+
 ## v0.1.9.9 — recover abandoned writer claims (beta candidate)
 
 - Issue #6: stable installation ID and identified operation markers; recover own abandoned claims under exclusive local Web Lock without discarding queued work.

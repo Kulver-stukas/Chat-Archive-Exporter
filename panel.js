@@ -10,7 +10,7 @@
     nextAutoAttempt: 0, autoFailures: 0, reconnectTimer: null,
     vaultPermission: 'unknown', vaultCandidate:null, lastConnectionCode:null, lastControllerCode:null, lastControllerCommand:null,
     library: null, libraryAccountId: null, libraryLoadedAt: 0, libraryLoading: null,
-    libraryJob: null, librarySelected: new Set(), libraryCatalogRevision: -1, libraryRefresh: null, librarySubmitting: false,
+    libraryJob: null, sharedActivity:null, libraryLoadError:null, librarySelected: new Set(), libraryCatalogRevision: -1, libraryRefresh: null, librarySubmitting: false,
   };
 
   const SURFACE=document.body.dataset.surface||'panel';
@@ -33,7 +33,7 @@
     // Settings and Tools are local views on every surface, including Side Panel.
     previousView=uiView==='tools'?previousView:uiView;uiView=view;applyModeView(state.mode);
     if(view==='activity'||view==='tools'||view==='settings'){
-      refreshManual().catch(fail);refreshSync().catch(fail);refreshLibraryState(true).catch(fail);
+      refreshManual().catch(fail);refreshSync().catch(fail);refreshLibraryState(true).catch(fail);refreshSharedActivity(true).catch(()=>{});
     }
   }
   async function openOptions(view='settings'){
@@ -77,6 +77,15 @@
   function uiRefresh(){
     const account=libraryAccount();const j=manualJob?.accountId===account?manualJob:null;
     const a=U.activity(j,state.libraryJob,state.sync);
+    const saved=state.sharedActivity?.account_id===account?state.sharedActivity.manual:null;
+    if(saved&&!j?.active&&(!j||!j.finishedAt||Date.parse(saved.finished_at)>Date.parse(j.finishedAt))){
+      $('manualSummary').textContent=saved.summary;
+      $('progress').classList.add('hidden');$('cancel').classList.add('hidden');$('retryManual').classList.add('hidden');
+      $('manualHint').textContent='Recorded in the shared Vault; no job or download is resumed in this browser.';
+      $('log').textContent=saved.summary;$('log').classList.remove('hidden');
+    }else if(!j){$('manualSummary').textContent=manualJob?.active?'A local export is running in another workspace.':'No manual export recorded.';
+      $('progress').classList.add('hidden');$('cancel').classList.add('hidden');$('retryManual').classList.add('hidden');$('log').textContent='';$('log').classList.add('hidden');
+    }
     $('appIcon').src='icons/cae-'+a.icon+'-32.png';$('appIcon').alt=a.label;
     $('overallStatus').textContent=!state.syncLoaded&&!a.busy?'Monitoring status unavailable':a.label;
     // A permission check in a newly opened UI document may return 'prompt'
@@ -474,9 +483,9 @@
     if(!['current','all','library'].includes(name))return;
     if(SURFACE!=='panel'&&name!=='current'){openPanel(name);return;}
     state.mode=name;uiView='export';applyModeView(name);refreshButtons();
-    if(name==='library'&&!state.libraryJob?.job?.active)status('Saved inventory. Refresh is manual.');
+    if(name==='library'&&!state.libraryJob?.job?.active)status('Loading saved inventory from Vault…');
     if(name==='all')ensureListLoaded().catch(fail);
-    if(name==='library')refreshLibraryState(true).catch(fail);
+    if(name==='library')refreshLibraryState(true,true).catch(fail);
   }
   function call(type, data = {}, progress = null, timeoutMs = 150000) {
     if (!state.port) return Promise.reject(new Error('No ChatGPT connection. Use Reconnect.'));
@@ -590,7 +599,7 @@
     }
     const previousAccount=state.lastVerifiedWorkspace?.accountId;
     if(previousAccount&&previousAccount!==scope.accountId){state.selected.clear();state.selectedProjects.clear();state.chats=[];state.projects=[];state.listAccountId=null;state.listLoadedAt=0;state.listSource=null;state.sync=null;state.syncLoaded=false;state.librarySelected.clear();}
-    state.scope = scope;state.directory=null;state.lastConnectionCode=null;
+    state.scope = scope;state.directory=null;state.sharedActivity=null;state.libraryLoadError=null;state.lastConnectionCode=null;
     chrome.runtime.sendMessage({type:'CAE_UI_BIND',tabId:tab.id,accountId:scope.accountId,display:scope.display,observed:scope.observed}).catch(()=>{});
     if(state.mode==='library')renderLibrary();
     rememberVerifiedWorkspace(scope,tab);
@@ -609,7 +618,8 @@
     if(manualJob?.active)showManual(manualJob);else status('Connected.');
     await refreshSync().catch(error => log('WARNING: Background status unavailable: ' + error.message));
     if (SURFACE==='panel'&&uiView==='export'&&state.mode === 'all'&&!manualJob?.active) ensureListLoaded().catch(error => log('WARNING: Could not load conversations: ' + error.message));
-    refreshLibraryState(true).catch(error => log('WARNING: Could not read saved Library state: ' + error.message));
+    refreshLibraryState(true,SURFACE==='panel'&&uiView==='export'&&state.mode==='library').catch(error => log('WARNING: Could not read saved Library state: ' + error.message));
+    refreshManual().catch(()=>{});refreshSharedActivity(true).catch(()=>{});
     if (!scope.observed) log('WARNING: Active workspace ID was not confirmed by the session API. Do not bulk export until the workspace is verified.');
     return scope;
   }
@@ -774,7 +784,7 @@
   function libraryEligible(f){return !!f.archive_eligibility?.selectable&&!['saved','already_archived'].includes(f.archive?.status);}
   function renderLibrary(){
     const catalog=state.libraryAccountId===libraryAccount()?state.library:null;
-    if(!catalog){$('libraryGroups').replaceChildren();$('librarySummary').textContent='No saved inventory for this workspace.';$('libraryCount').textContent='No inventory loaded.';libraryVisible=[];refreshButtons();return;}
+    if(!catalog){$('libraryGroups').replaceChildren();$('librarySummary').textContent=state.libraryLoadError?'Saved inventory unavailable: '+state.libraryLoadError:state.libraryRefresh?'Loading saved inventory…':'No saved inventory for this workspace.';$('libraryCount').textContent='No inventory loaded.';libraryVisible=[];refreshButtons();return;}
     const summary=catalog.summary||{};
     $('librarySummary').textContent=`${summary.total||0} records (${summary.library_files||0} in Library, ${summary.project_source_only||0} Source-only) - ${catalog.status||'unknown'} - ${summary.project_source_excluded||0} verified Source copies excluded`;
     const needle=$('librarySearch').value.toLowerCase().trim(),context=$('libraryContextFilter').value,origin=$('libraryOrigin').value,media=$('libraryMedia').value,arch=$('libraryArchiveFilter').value;
@@ -821,33 +831,67 @@
     $('librarySelectAll').checked=sel.checked;$('librarySelectAll').indeterminate=sel.mixed;
     const hiddenCount=[...state.librarySelected].filter(id=>!visibleIds.includes(id)).length;
     $('librarySelectedCount').textContent=`${state.librarySelected.size} selected`+(hiddenCount?` (${hiddenCount} hidden by filters)`:'');
-    const job=j?.job;
-    $('libraryJobStatus').textContent=job?`${job.status}: ${job.detail}`:'Idle. Start inventory is the only initial scan trigger.';
+    const job=j?.job,saved=state.sharedActivity?.account_id===libraryAccount()?state.sharedActivity.library:null;
+    $('refreshLibrary').textContent=state.libraryAccountId===libraryAccount()&&state.library?'Refresh inventory':'Start inventory';
+    const useSaved=saved&&!job?.active&&(!job||!job.finished_at||Date.parse(saved.finished_at)>Date.parse(job.finished_at));
+    $('libraryJobStatus').textContent=useSaved?saved.summary:job?`${job.status}: ${job.detail}`:state.library?'Saved inventory loaded.':'Idle. Start inventory is the only initial scan trigger.';
   }
-  async function refreshLibraryState(includeCatalog=false){
+  function applyLibraryState(j,account){
+    if(libraryAccount()!==account)return;
+    state.libraryJob=j;
+    if(!j||j.catalog===null){state.library=null;state.libraryAccountId=null;state.librarySelected.clear();state.libraryCatalogRevision=-1;renderLibrary();}
+    if(j?.catalog){
+      state.library=j.catalog;state.libraryAccountId=account;state.libraryCatalogRevision=j.catalog_revision;
+      const archived=new Set(j.catalog.items.filter(x=>['saved','already_archived'].includes(x.archive?.status)).map(x=>x.id));
+      for(const id of archived)state.librarySelected.delete(id);renderLibrary();
+    }
+    refreshButtons();refreshLibraryControls();
+  }
+  async function refreshLibraryState(includeCatalog=false,updateAPI=false){
     const account=libraryAccount();if(!account)return;
-    if(state.libraryRefresh){await state.libraryRefresh;if(includeCatalog)return refreshLibraryState(true);return;}
+    if(state.libraryRefresh){await state.libraryRefresh;if(includeCatalog)return refreshLibraryState(true,updateAPI);return;}
+    const context=contextGeneration,dir=state.directory,valid=()=>libraryAccount()===account&&contextGeneration===context;
     const operation=(async()=>{
       let j=await syncCommand('CAE_LIBRARY_JOB_STATUS',{accountId:account,withCatalog:includeCatalog});
-      if(libraryAccount()!==account)return;
-      if(j&&!includeCatalog&&j.catalog_revision!==state.libraryCatalogRevision)
-        j=await syncCommand('CAE_LIBRARY_JOB_STATUS',{accountId:account,withCatalog:true});
-      if(libraryAccount()!==account)return;
-      state.libraryJob=j;
-      if(!j){state.library=null;state.libraryAccountId=null;state.librarySelected.clear();state.libraryCatalogRevision=-1;renderLibrary();}
-      if(j?.catalog){
-        state.library=j.catalog;state.libraryAccountId=account;state.libraryCatalogRevision=j.catalog_revision;
-        const archived=new Set(j.catalog.items.filter(x=>['saved','already_archived'].includes(x.archive?.status)).map(x=>x.id));
-        for(const id of archived)state.librarySelected.delete(id);
-        renderLibrary();
+      if(!valid())return;
+      if(j&&!includeCatalog&&j.catalog_revision!==state.libraryCatalogRevision)j=await syncCommand('CAE_LIBRARY_JOB_STATUS',{accountId:account,withCatalog:true});
+      if(!valid())return;
+      applyLibraryState(j,account);
+      // Only a live verified binding may load the disk snapshot; a cached
+      // workspace name or an old account's directory cannot authorize it.
+      if(includeCatalog&&dir&&dir===state.directory&&state.vaultPermission==='granted'&&(state.scope?.observed&&state.scope.accountId===account)&&!state.currentContextPending&&!j?.job?.active&&Number.isInteger(state.tab?.id)){
+        const options={accountId:account,display:state.scope.display,tabId:state.tab.id};
+        try{
+          j=await syncCommand('CAE_LIBRARY_JOB_LOAD_VAULT',{options});
+          if(!valid()||dir!==state.directory)return;
+          state.libraryLoadError=null;applyLibraryState(j,account);
+          // Paint the existing catalog before starting the optional one-shot
+          // metadata update. Never create the first baseline automatically.
+          if(updateAPI&&j?.baseline_at&&j.catalog&&state.mode==='library'&&uiView==='export'){
+            status('Saved inventory loaded from Vault. Checking for updates if due.');
+            j=await syncCommand('CAE_LIBRARY_JOB_REFRESH_ONCE',{options});
+            if(!valid()||dir!==state.directory)return;applyLibraryState(j,account);
+            status(j?.job?.active?'Saved inventory displayed; checking API for updates.':'Saved inventory loaded from Vault.');
+          }else if(updateAPI&&!j?.catalog)status('No saved inventory. Use Start inventory.');
+        }catch(e){if(valid()&&dir===state.directory){state.libraryLoadError=e.message;renderLibrary();if(updateAPI)status(state.library?'Showing saved inventory; update unavailable.':'Could not read the saved inventory: '+e.message);}}
       }
       if(j?.job?.active||j?.enabled){
         const bound=await ChatArchiveLibraryStore.directory(account);
-        if(bound&&libraryAccount()===account)state.directory=bound;
+        if(bound&&valid())state.directory=bound;
       }
-      refreshButtons();refreshLibraryControls();
-    })().finally(()=>{if(state.libraryRefresh===operation)state.libraryRefresh=null;});
+      if(valid()){refreshButtons();refreshLibraryControls();}
+    })().finally(()=>{if(state.libraryRefresh===operation){state.libraryRefresh=null;if(valid()&&!state.library)renderLibrary();}});
     state.libraryRefresh=operation;return operation;
+  }
+  let historyRefresh=null;
+  async function refreshSharedActivity(force=false){
+    const account=libraryAccount(),dir=state.directory,context=contextGeneration;
+    if(!account||!dir||state.vaultPermission!=='granted'||!(state.scope?.observed&&state.scope.accountId===account)||state.currentContextPending)return;
+    if(historyRefresh){await historyRefresh; if(force&&contextGeneration===context&&state.directory===dir)return refreshSharedActivity(false);return;}
+    const p=syncCommand('CAE_UI_WORKSPACE_HISTORY',{accountId:account,display:state.scope.display,force}).then(r=>{
+      if(contextGeneration!==context||libraryAccount()!==account||state.directory!==dir)return;
+      state.sharedActivity=r?.account_id===account?r:null;uiRefresh();refreshLibraryControls();
+    }).finally(()=>{if(historyRefresh===p)historyRefresh=null;});historyRefresh=p;return p;
   }
   async function startLibrary(){
     if(state.librarySubmitting)return;
@@ -1008,6 +1052,7 @@
       if(state.sync?.enabled)await retainGrantedVault(true);
       await syncCommand('CAE_MANUAL_WAKE',{accountId:account}).catch(()=>{});
       if(state.libraryJob?.job?.status==='permission_required')await syncCommand('CAE_LIBRARY_JOB_RESUME',{accountId:account}).catch(()=>{});
+      await refreshLibraryState(true,state.mode==='library'&&uiView==='export').catch(()=>{});refreshSharedActivity(true).catch(()=>{});
       refreshLibraryControls();status('Original Vault reselected. Settings, enrollment date and accepted jobs retained.');return;
     }
     restored=null;restoreChecked=null;state.vaultCandidate=dir;
@@ -1018,6 +1063,7 @@
     try{await ChatArchiveVault.rememberDirectory(dir);}
     catch(e){log('WARNING: Vault folder could not be remembered: '+e.message);}
     await refreshVaultStatus();refreshLibraryControls();await discoverPreferences();
+    await refreshLibraryState(true,state.mode==='library'&&uiView==='export').catch(()=>{});refreshSharedActivity(true).catch(()=>{});
     status(state.directory===dir?'Vault selected. Existing files and indexes will be reused.':'Vault selected. Verify ChatGPT and connect it to this workspace.');
   }
   async function grantVaultAccess() {
@@ -1037,6 +1083,7 @@
     await syncCommand('CAE_MANUAL_WAKE',{accountId:state.scope?.accountId}).catch(()=>{});
     if(libraryAccount())await syncCommand('CAE_LIBRARY_JOB_RESUME',{accountId:libraryAccount()}).catch(()=>{});
     refreshLibraryControls();await discoverPreferences();
+    await refreshLibraryState(true,state.mode==='library'&&uiView==='export').catch(()=>{});refreshSharedActivity(true).catch(()=>{});
     status('Vault write access granted; accepted jobs may resume.');
   }
   function downloadBlob(blob, name) {
@@ -1057,7 +1104,7 @@
   }
   function showManual(j) {
     manualJob = j;
-    if (!j) {uiRefresh();return;}
+    if (!j||j.accountId!==libraryAccount()) {if(!state.listLoading)markBusy(!!j?.active);uiRefresh();return;}
     if(j.active&&j.destination==='vault'&&j.accountId===state.scope?.accountId)restoreManualBinding(j).then(()=>refreshVaultStatus()).catch(e=>log('Could not restore manual Vault binding: '+e.message));
     const busy = !!j.active;
     if (state.busy !== busy && !state.listLoading) markBusy(busy);
@@ -1186,7 +1233,7 @@
     try{
       const pending=chrome.runtime.sendMessage({type,...extra});
       // Read requests can expire; never automatically retry a mutating command.
-      const readOnly=['CAE_MANUAL_STATUS','CAE_SYNC_STATUS','CAE_LIBRARY_JOB_STATUS','CAE_EXPORT_PREFS_GET','CAE_UI_CHAT_CACHE','CAE_VAULT_DIAGNOSTICS'].includes(type);
+      const readOnly=['CAE_MANUAL_STATUS','CAE_SYNC_STATUS','CAE_LIBRARY_JOB_STATUS','CAE_LIBRARY_JOB_LOAD_VAULT','CAE_UI_WORKSPACE_HISTORY','CAE_EXPORT_PREFS_GET','CAE_UI_CHAT_CACHE','CAE_VAULT_DIAGNOSTICS'].includes(type);
       const response=readOnly?await deadline(pending,type,12000):await pending;
       if(!response?.ok)throw Object.assign(new Error(response?.error||'No response to '+type+' from the background controller.'),{code:response?.code});
       return response.result;
@@ -1420,10 +1467,17 @@
     if(document.visibilityState==='visible'){
       refreshVaultStatus().catch(()=>{});
       scheduleReconnect();
-      if (state.scope) refreshSync().catch(()=>{});
+      if (state.scope){refreshSync().catch(()=>{});refreshSharedActivity().catch(()=>{});if(state.mode==='library'&&uiView==='export')refreshLibraryState(true,true).catch(()=>{});}
     }
   });
   window.addEventListener('focus',()=>{refreshVaultStatus().catch(()=>{});if(!state.scope?.observed&&state.autoFailures>5){state.autoFailures=0;state.nextAutoAttempt=0;}scheduleReconnect();});
+  // Remote profile writes do not emit chrome.storage.onChanged in this
+  // browser. Visible panels re-read shared metadata, not the provider API.
+  if(SURFACE!=='popup')setInterval(()=>{
+    if(document.visibilityState!=='visible'||state.currentContextPending||!state.scope?.observed||state.vaultPermission!=='granted')return;
+    refreshSharedActivity().catch(()=>{});
+    if(uiView==='export'&&state.mode==='library')refreshLibraryState(true,false).catch(()=>{});
+  },30000);
   window.addEventListener('online',()=>{state.autoFailures=0;state.nextAutoAttempt=0;scheduleReconnect(300,true);ensureExportPreferences().catch(()=>{});});
   chrome.tabs.onActivated?.addListener(info=>{
     const ownWindow=state.tab?.windowId??uiWindowId;
@@ -1503,7 +1557,7 @@
   let libraryStatusTimer=null;
   chrome.storage.onChanged.addListener((changes,area)=>{
     if(area==='local'&&changes['cae.library-status.v1']?.newValue?.account_id===libraryAccount()){
-      clearTimeout(libraryStatusTimer);libraryStatusTimer=setTimeout(()=>refreshLibraryState().catch(fail),200);
+      clearTimeout(libraryStatusTimer);libraryStatusTimer=setTimeout(()=>{refreshLibraryState().catch(fail);refreshSharedActivity(true).catch(()=>{});},200);
     }
   });
   $('downloadLibraryCatalog').addEventListener('click', downloadLibrary);
@@ -1532,7 +1586,7 @@
     try{showManual(await syncCommand('CAE_MANUAL_RETRY',{jobId:manualJob.id}));}catch(e){fail(e);}
   });
   chrome.storage.onChanged.addListener((changes,area)=>{
-    if(area==='local'&&changes['cae.manual-status.v1'])refreshManual().catch(()=>{});
+    if(area==='local'&&changes['cae.manual-status.v1']){refreshManual().catch(()=>{});refreshSharedActivity(true).catch(()=>{});}
   });
   refreshManual().catch(e=>log('Manual export controller unavailable: '+e.message));
   setPanelModeFromSession().catch(()=>{});
@@ -1566,7 +1620,7 @@
   for(const id of ['chatContainer','chatArchived'])$(id).addEventListener('change',renderChats);
   for(const id of ['libraryOrigin','libraryMedia','libraryArchiveFilter'])$(id).addEventListener('change',renderLibrary);
   $('keepPanelOpen').addEventListener('change',uiRefresh);
-  $('refreshStatus').addEventListener('click',()=>Promise.all([refreshManual(),refreshSync(),refreshVaultStatus(),refreshLibraryState(true)]).then(()=>status('Cached job and Vault status refreshed. No inventory scan.')).catch(fail));
+  $('refreshStatus').addEventListener('click',()=>Promise.all([refreshManual(),refreshSync(),refreshVaultStatus(),refreshLibraryState(true),refreshSharedActivity(true)]).then(()=>status('Cached job and Vault status refreshed. No inventory scan.')).catch(fail));
   $('showWidget').addEventListener('click',()=>syncCommand('CAE_UI_TOGGLE_WIDGET',{tabId:state.tab?.id})
     .then(r=>status(r?.shown?'Widget shown. Click again to hide it.':'Widget hidden.'))
     .catch(fail));

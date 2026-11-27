@@ -33,3 +33,6 @@ You choose what to export and where to save it. In Settings you can pause backgr
 The use of information obtained through Chrome APIs is limited to the disclosed local archive purpose and related operational requirements. The developer does not use that information for advertising, profiling, credit decisions, or unrelated purposes. This extension's use and transfer of information received from Google APIs adheres to the Chrome Web Store User Data Policy, including the Limited Use requirements.
 
 This is independent software, not affiliated with OpenAI. It uses undocumented web endpoints; service terms and workspace rules may restrict automated extraction. Use only where you are authorized to archive the data. For privacy questions or security reports, contact the developer through the repository's contact/support facilities: https://github.com/Kulver-stukas/Chat-Archive-Exporter/issues (do not include confidential data in a public issue).
+
+### Shared Workspace activity
+The connected local Vault may contain limited terminal manual/Library operation receipts (workspace identifier, operation type, timestamps, status and counts) for display in other profiles with access to that same Vault. Active jobs, credentials, permission grants, raw logs and download identifiers are not shared through these receipts.

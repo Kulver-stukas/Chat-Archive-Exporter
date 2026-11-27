@@ -52,6 +52,21 @@
     }
     return verification.get(tabId);
   }
+  const historyRetries=new Map();
+  async function workspaceHistory(accountId,display,force=false){
+    const A=root.ChatArchiveWorkspaceActivity;if(!A||!root.ChatArchiveLibraryStore.validId(accountId))return null;
+    // Backfill terminal local receipts from older versions as well as retries
+    // after contention. Active jobs/queues are never published or imported.
+    if(!historyRetries.has(accountId)||Date.now()-historyRetries.get(accountId)>30000){
+      historyRetries.set(accountId,Date.now());
+      await root.ChatArchiveManualJobs.shareLatest?.(accountId).catch(()=>{});
+      await root.ChatArchiveLibraryJobs.shareLatest?.(accountId).catch(()=>{});
+    }
+    const r=await A.read(accountId,display,force);
+    return r?{account_id:accountId,manual:r.manual?{finished_at:r.manual.finished_at,summary:A.summary(r.manual)}:null,
+      library:r.library?{finished_at:r.library.finished_at,summary:A.summary(r.library)}:null}:null;
+  }
+  function preferSaved(local,receipt,finished){return !!receipt&&!local?.active&&(!local||!finished||Date.parse(receipt.finished_at)>Date.parse(finished));}
   async function widgetState(sender){
     let b;
     try {b=await ensureBound(sender);}catch(e){return {verified:false,label:'Reconnecting',busy:false,
@@ -61,8 +76,9 @@
     const results=await Promise.allSettled([
       bounded('Manual job status',()=>root.ChatArchiveManualJobs.inspect()),
       bounded('Library status',()=>root.ChatArchiveLibraryJobs.inspect(b.accountId,false)),
-      bounded('Monitoring status',()=>root.ChatArchiveSync.inspect(b.accountId))]);
-    const [manual,library,sync]=results.map(r=>r.status==='fulfilled'?r.value:null);
+      bounded('Monitoring status',()=>root.ChatArchiveSync.inspect(b.accountId)),
+      bounded('Saved workspace activity',()=>workspaceHistory(b.accountId,b.display)).catch(()=>null)]);
+    const [manual,library,sync,history]=results.map(r=>r.status==='fulfilled'?r.value:null);
     const known=results.map(r=>r.status==='fulfilled');
     const m=manual?.accountId===b.accountId?manual:null;
     const a=U.activity(m,library,sync);
@@ -85,16 +101,18 @@
       }
       }
     }catch(e){vault='Access status unavailable';vaultPermission='unknown';vaultError=e.code||'UNAVAILABLE';}
-    const warning=vaultError?'Vault access check: '+vaultError:!known.every(Boolean)?'One or more controller statuses unavailable.':'';
-    const manualSummary=!known[0]?'Unknown':m?`${U.humanStatus(m)} - ${safeLine(m.message||'')}. Chats: ${m.chatsDone||0}/${m.totalChats||0}, ${m.counts?.failed||0} failed.`:'No manual export recorded.';
-    const librarySummary=!known[1]?'Unknown':library?.job?`${U.humanStatus(library.job)}: ${safeLine(library.job.detail||'')}`:'No Library task recorded.';
+    const warning=vaultError?'Vault access check: '+vaultError:!known.slice(0,3).every(Boolean)?'One or more controller statuses unavailable.':'';
+    const savedManual=preferSaved(m,history?.manual,m?.finishedAt||m?.updatedAt);
+    const savedLibrary=preferSaved(library?.job,history?.library,library?.job?.finished_at);
+    const manualSummary=savedManual?history.manual.summary:!known[0]?'Unknown':m?`${U.humanStatus(m)} - ${safeLine(m.message||'')}. Chats: ${m.chatsDone||0}/${m.totalChats||0}, ${m.counts?.failed||0} failed.`:'No manual export recorded.';
+    const librarySummary=savedLibrary?history.library.summary:!known[1]?'Unknown':library?.job?`${U.humanStatus(library.job)}: ${safeLine(library.job.detail||'')}`:'No Library task recorded.';
     const syncSummary=!known[2]?'Unknown':sync?.enabled?`${safeLine(sync.status||'idle')} · ${sync.trackedChats||0} archived chats · ${sync.queue||0} queued · ${sync.buffer?.pending||0} buffered · ${sync.buffer?.conflicts||0} conflicts`:'Off';
     return {verified:true,scope_stale:false,canExport:/\/c\/[0-9a-f-]{36}/i.test(sender.tab.url||''),
       workspace:b.display,label:a.busy?a.label:warning?'Needs attention':a.label,icon:a.icon,busy:a.busy,monitoring:known[1]&&known[2]?a.monitoring:null,vault,vaultPermission,task,warning,
       monitoringSummary:!known[1]||!known[2]?'Monitoring status partially unavailable':a.monitoring?'Monitoring enabled; waiting for changes':'Monitoring disabled',
       manualSummary,librarySummary,syncSummary,
       syncVault:sync?.vaultName||'',syncSince:sync?.since||null,syncMessage:safeLine(sync?.message||''),
-      logs:{manual:formatLogs(m?.logs,12),inventory:formatLogs(library?.events,12),monitoring:formatLogs(sync?.logs,16)}};
+      logs:{manual:savedManual?[history.manual.summary]:formatLogs(m?.logs,12),inventory:savedLibrary?[history.library.summary]:formatLogs(library?.events,12),monitoring:formatLogs(sync?.logs,16)}};
   }
   async function vaultChatList(accountId,display){
     const C=root.CAEUIChatListCache;
@@ -173,6 +191,7 @@
       }else if(message.type==='CAE_UI_WIDGET_BIND'&&fromPage){work=widgetState(sender);}
       else if(message.type==='CAE_UI_WIDGET_STATUS'&&fromPage){work=widgetState(sender);}
       else if(message.type==='CAE_UI_CHAT_CACHE'&&!fromPage){work=vaultChatList(message.accountId,message.display);}
+      else if(message.type==='CAE_UI_WORKSPACE_HISTORY'&&!fromPage){work=workspaceHistory(message.accountId,message.display,message.force===true);}
       else if(['CAE_UI_SHOW_WIDGET','CAE_UI_TOGGLE_WIDGET'].includes(message.type)&&!fromPage){
         work=ensureWidget(message.tabId).then(()=>chrome.tabs.sendMessage(message.tabId,
           {type:message.type==='CAE_UI_TOGGLE_WIDGET'?'CAE_UI_WIDGET_TOGGLE':'CAE_UI_WIDGET_SHOW'},{frameId:0}));

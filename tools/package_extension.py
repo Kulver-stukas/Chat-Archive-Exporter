@@ -3,7 +3,7 @@ from pathlib import Path
 import argparse,json,re,zipfile
 root=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser();p.add_argument('output',type=Path);args=p.parse_args()
-files=[f for f in root.iterdir() if f.is_file() and (f.suffix in {'.js','.html','.css'} or f.name in {'manifest.json','README.md','CHANGELOG.md','LICENSE','PRIVACY.md','RELEASE_NOTES_v0.1.8-rev1.md','RELEASE_NOTES_v0.1.9-rev1.md','RELEASE_NOTES_v0.1.9-rev2.md','RELEASE_NOTES_v0.1.9-rev3.md','RELEASE_NOTES_v0.1.9-rev4.md','UAT_v0.1.9-rev1.md','TEST_REPORT_v0.1.9-rev1.md','TEST_REPORT_v0.1.9-rev2.md','TEST_REPORT_v0.1.9-rev3.md','TEST_REPORT_v0.1.9-rev4.md','RELEASE_NOTES_v0.1.9-rev5.md','TEST_REPORT_v0.1.9-rev5.md','TODO_v0.1.9.md','UAT_v0.1.9-rev7.md','UAT_v0.1.9-rev8.md','UAT_v0.1.9.9.md'})]
+files=[f for f in root.iterdir() if f.is_file() and (f.suffix in {'.js','.html','.css'} or f.name in {'manifest.json','README.md','CHANGELOG.md','LICENSE','PRIVACY.md','RELEASE_NOTES_v0.1.8-rev1.md','RELEASE_NOTES_v0.1.9-rev1.md','RELEASE_NOTES_v0.1.9-rev2.md','RELEASE_NOTES_v0.1.9-rev3.md','RELEASE_NOTES_v0.1.9-rev4.md','UAT_v0.1.9-rev1.md','TEST_REPORT_v0.1.9-rev1.md','TEST_REPORT_v0.1.9-rev2.md','TEST_REPORT_v0.1.9-rev3.md','TEST_REPORT_v0.1.9-rev4.md','RELEASE_NOTES_v0.1.9-rev5.md','TEST_REPORT_v0.1.9-rev5.md','TODO_v0.1.9.md','UAT_v0.1.9-rev7.md','UAT_v0.1.9-rev8.md','UAT_v0.1.9.9.md','UAT_v0.1.9.10.md'})]
 for folder in ('lib','ui','icons'):files.extend(f for f in (root/folder).rglob('*') if f.is_file())
 names={str(f.relative_to(root)) for f in files};manifest=json.loads((root/'manifest.json').read_text())
 for cs in manifest['content_scripts']:
