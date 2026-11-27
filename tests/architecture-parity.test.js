@@ -19,5 +19,5 @@ assert(!/chatgpt\.com|backend-api|chrome\.|document\.|indexedDB/.test(code),'gen
 const m=require('../manifest.json'),boot=require('./provider-bootstrap').boot({window:{}});
 const vm=require('node:vm');vm.runInContext(fs.readFileSync(path.join(base,'providers/chatgpt/api.js'),'utf8'),boot);
 assert.deepEqual(Object.keys(boot.window.ChatArchiveApi).sort(),Array.from(boot.ChatArchiveProviders.legacy.operations).sort(),'legacy API must implement exactly the declared operations');
-assert.equal(m.version,'0.2.0.4');
+assert.equal(m.version,'0.2.0.5');
 console.log(`PASS: ${Object.keys(baseline.runtime_sha256).length-changed.length} unchanged runtime/assets, ${changed.length} reviewed routing, entrypoint and rev.6-8 repair changes, pure contract layer and exact declared API`);

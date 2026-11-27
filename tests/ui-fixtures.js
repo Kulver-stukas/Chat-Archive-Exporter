@@ -40,11 +40,13 @@
    if(m.type==='CAE_SYNC_STATUS')return {ok:true,result:structuredClone(t.sync)};
    if(m.type==='CAE_SYNC_ENABLE'){t.sync={...m.options,enabled:true,status:'idle',startedAt:'2026-11-17T10:00:00Z',trackedChats:3};return {ok:true,result:structuredClone(t.sync)};}
    if(m.type==='CAE_SYNC_PAUSE'){t.sync.enabled=false;t.sync.status='paused';return {ok:true,result:structuredClone(t.sync)};}
-   if(m.type==='CAE_LIBRARY_JOB_STATUS'){let r=structuredClone(t.lib);if(r&&m.withCatalog===false)delete r.catalog;return {ok:true,result:r};}
+   if(m.type==='CAE_LIBRARY_JOB_LOAD_VAULT'&&t.savedLib)t.lib=structuredClone(t.savedLib);
+   if(['CAE_LIBRARY_JOB_STATUS','CAE_LIBRARY_JOB_LOAD_VAULT','CAE_LIBRARY_JOB_REFRESH_ONCE'].includes(m.type)){let r=structuredClone(t.lib);if(r&&m.withCatalog===false)delete r.catalog;return {ok:true,result:r};}
    if(m.type==='CAE_LIBRARY_JOB_START'){t.starts++;t.lib.job={id:'scan',status:'running',active:true,detail:'Scanning files'};return {ok:true,result:structuredClone(t.lib)};}
    if(m.type==='CAE_LIBRARY_JOB_ARCHIVE'){if(t.reject)return {ok:false,error:'Fixture: archive rejected'};t.archives.push(m.options);t.lib.job={id:'archive',status:'running',active:true,detail:'Archiving originals'};return {ok:true,result:structuredClone(t.lib)};}
    if(m.type==='CAE_LIBRARY_JOB_STOP'){t.lib.job={status:'cancelled',active:false,detail:'Stopped'};t.lib.enabled=false;return {ok:true,result:structuredClone(t.lib)};}
    if(m.type==='CAE_LIBRARY_JOB_MONITOR'){t.lib.enabled=m.enabled;return {ok:true,result:structuredClone(t.lib)};}
+   if(m.type==='CAE_UI_WORKSPACE_HISTORY')return {ok:true,result:t.sharedActivity||null};
    if(m.type==='CAE_VAULT_DIAGNOSTICS')return {ok:true,result:{schema:'fixture',events:[]}};
    if(m.type==='CAE_UI_WIDGET_BIND')t.binds++;
    if(m.type==='CAE_UI_WIDGET_BIND'||m.type==='CAE_UI_WIDGET_STATUS')return {ok:true,result:{verified:true,canExport:true,

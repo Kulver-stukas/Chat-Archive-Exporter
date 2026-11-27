@@ -1,3 +1,9 @@
+## v0.2.0 rev.3 hotfix 2 (manifest 0.2.0.5) — Shared Workspace state
+
+- Load an existing Library inventory from the verified Workspace Vault before any provider refresh. Adoption is read-only on disk and independent of monitoring preferences. Open Files triggers at most one lightweight metadata check when the saved inventory is older than five minutes and no local job is active; initial inventory remains explicit.
+- Persist limited terminal manual export and Library activity receipts in the Workspace folder. Backfill locally retained terminal history on an authorized view, reconstruct older Library history from the existing inventory/download report, prefer newer receipts, and refresh visible cross-profile history from disk. Active jobs, queues, full logs, downloads, and grants remain local.
+- No new permissions, no migration of existing indexes. Resource-level coordination remains a separate rev.4 task.
+
 ## v0.2.0 rev.3 hotfix (manifest 0.2.0.4) — recover abandoned writer claims
 
 - Issue #6: identify each installation and write operation, recover own abandoned markers under local exclusive Web Lock, preserve jobs and archive indexes.

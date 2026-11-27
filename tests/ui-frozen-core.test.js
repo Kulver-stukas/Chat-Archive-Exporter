@@ -14,6 +14,6 @@ for(const [file,sha] of Object.entries(baseline.archive_core)){
   else assert.equal(actual,sha,'Unexpected technical change outside v0.1.8/v0.1.9 scope: '+file);
 }
 // The merged worker intentionally changes authorization and startup; pin the reviewed implementation.
-assert.equal(hash(fs.readFileSync(path.join(root,'worker.js'))),'0857b59b2f2aab071952ff5c9488ef677b5b860d97c7de3908488dc971d72583');
+assert.equal(hash(fs.readFileSync(path.join(root,'worker.js'))),'57370bd0ea5e7bb90cdc7d78806ee6bf1817deae88be6d1766a9fe2d5abb330d');
 const m=require('../manifest.json');assert.deepEqual(m.permissions,baseline.permissions);assert.deepEqual(m.host_permissions,baseline.host_permissions);assert.equal(m.minimum_chrome_version,'116');
 console.log('PASS: explicit integrity/selection delta allowlist, unrelated core and worker routes unchanged, no permission expansion');

@@ -1,3 +1,5 @@
+> **v0.2.0 rev.3 hotfix 2 (0.2.0.5):** Files loads the saved Library inventory from the connected Workspace Vault before an optional due metadata refresh. The last recorded terminal manual and Library activities can be displayed across authorized browser profiles. Active jobs remain local. See RELEASE_NOTES_v0.2.0-rev3-hotfix2.md.
+
 # Chat Archive Exporter — v0.2.0 rev.3 hotfix (architecture preview)
 
 Internal ChatGPT-only test build (manifest 0.2.0.4). Writer-claim recovery is described in RELEASE_NOTES_v0.2.0-rev3-hotfix.md and UAT_v0.2.0-rev3-hotfix.md. Issues #6 and #7 track the defect and storage architecture.  The confirmed rev.2 source snapshot is on GitHub in `dev/v0.2`; rev.3 separates the ChatGPT adapter from common rendering and byte transfer. See [architecture](ARCHITECTURE_v0.2.0.md), [release notes](RELEASE_NOTES_v0.2.0-rev3.md), [test report](TEST_REPORT_v0.2.0-rev3.md) and [UAT](UAT_v0.2.0-rev3.md). The public v0.1.9.8 beta is maintained separately on `v0.1`. Rev.3 is not a store submission or GitHub release.

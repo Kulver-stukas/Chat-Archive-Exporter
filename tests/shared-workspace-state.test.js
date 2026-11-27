@@ -1,0 +1,44 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const {createLibraryEnvironment,fid}=require('./library-job-fixtures');
+const {createEnvironment}=require('./manual-fixtures');
+const add=e=>{const bindings=new Map(),V=e.box.ChatArchiveVault;V.rememberWorkspaceDirectory=async(id,dir)=>bindings.set(id,dir);V.restoreWorkspaceDirectory=async id=>bindings.get(id)||null;vm.runInContext(fs.readFileSync(__dirname+'/../lib/workspace-activity.js','utf8'),e.box);return e.box.ChatArchiveWorkspaceActivity;};
+const plain=x=>JSON.parse(JSON.stringify(x));
+(async()=>{
+ const a=createLibraryEnvironment(),A=add(a);a.rootRows=[a.node(1)];a.detailMap[fid(1)]={use_case:'my_files'};
+ await a.box.ChatArchiveVault.rememberWorkspaceDirectory(a.account,a.root);
+ await a.start(false);const initial=await a.drainLib();assert.equal(initial.job.status,'complete');assert.equal(initial.enabled,false);
+ const inventory=a.prefix+'/_Library/_inventory.json',original=await a.read(inventory);
+ const m=createEnvironment();add(m);await m.box.ChatArchiveVault.rememberWorkspaceDirectory(m.account,a.root);
+ const originalManual='shared-test-manual-download-001';await m.submit(m.opts(originalManual,[m.chat(1)],'download','current'));const j=await m.drain();assert.equal(j.status,'completed');
+ const receipt=await A.read(a.account,'Workspace test',true);assert.equal(receipt.manual.destination,'download');assert.equal(receipt.manual.delivery,'download_completed');assert.equal(receipt.library.operation,'manual');
+ assert(A.summary(receipt.manual).includes('originating browser'));
+ const b=createLibraryEnvironment(),B=add(b);await b.box.ChatArchiveVault.rememberWorkspaceDirectory(b.account,a.root);
+ const o={accountId:b.account,display:'Changed workspace label',tabId:1};
+ assert.equal(await b.L.inspect(b.account),null);
+ const guard=await a.box.ChatArchiveVault.acquireLock(true),held=await a.box.ChatArchiveVault.acquireVaultGuard(a.root,guard);
+ const adopted=await b.L.hydrate(o);assert.equal(adopted.catalog.items.length,1);assert.equal(adopted.baseline_at,initial.baseline_at);assert.equal(adopted.enabled,false);assert.equal(adopted.job,null);assert.equal(b.libCalls.length,0);
+ assert.equal(await a.read(inventory),original,'passive adoption does not write archive');
+ assert.equal((await B.read(b.account,o.display,true)).manual.operation_id,originalManual);
+ assert.equal(await b.C.inspect(),null,'history does not create a local export job');
+ await held();await guard();
+ assert.equal((await b.L.hydrate(o)).catalog_revision,adopted.catalog_revision,'unchanged snapshot does not churn local state');
+ assert.equal((await b.L.refreshOnce(o)).job,null,'recent snapshot is not immediately scanned');
+ b.advance(6*60_000);b.rootRows=[b.node(1),b.node(2,'new.txt',{record_creation_time:'2026-11-12T02:06:00Z'})];b.detailMap[fid(2)]={use_case:'my_files'};
+ const once=await b.L.refreshOnce(o);assert.equal(once.job.kind,'incremental');assert.equal(once.enabled,false);
+ const updated=await b.drainLib();assert.equal(updated.job.status,'complete');assert.equal(updated.enabled,false);assert.equal(updated.baseline_at,initial.baseline_at);assert.equal(updated.catalog.items.length,2);
+ assert(!b.libCalls.some(x=>x.type==='CAE_ASSET_START'),'one-shot never downloads originals');
+ assert(!b.libCalls.some(x=>x.type==='CAE_LIBRARY_PAGE'&&x.query?.kind==='details'&&x.query.fileIds.includes(fid(1))),'no old descriptor polling');
+ const readAgain=await a.L.hydrate({accountId:a.account,display:'Workspace test',tabId:1});assert.equal(readAgain.catalog.items.length,2,'old profile sees new commit');
+ const still=(await b.L.refreshOnce(o));assert.equal(still.job.status,'complete','refresh cadence enforced');
+ const old=plain(receipt.manual);old.finished_at='2020-01-01T00:00:00Z';old.operation_id='old-receipt';assert.equal(await B.publish(old,o.display),true);assert.equal((await B.read(b.account,o.display,true)).manual.operation_id,originalManual,'older receipt does not overwrite newer');
+ const empty=createLibraryEnvironment();add(empty);await empty.box.ChatArchiveVault.rememberWorkspaceDirectory(empty.account,empty.root);
+ const eo={accountId:empty.account,display:'Workspace test',tabId:1};assert.equal(await empty.L.hydrate(eo),null);assert.equal(await empty.L.refreshOnce(eo),null);assert.equal(empty.libCalls.length,0);
+ // Legacy snapshots from earlier builds remain viewable without inventing a task.
+ const legacy=createLibraryEnvironment();legacy.rootRows=[legacy.node(1)];await legacy.start(false);await legacy.drainLib();const L=add(legacy);await legacy.box.ChatArchiveVault.rememberWorkspaceDirectory(legacy.account,legacy.root);
+ const h=await L.read(legacy.account,'Workspace test',true);assert.equal(h.library.operation,'saved_inventory');assert.equal(h.manual,null);
+ // Reject another account's inventory (even if a display name matches).
+ const foreign=createLibraryEnvironment();add(foreign);await foreign.box.ChatArchiveVault.rememberWorkspaceDirectory('foreign-account',a.root);
+ await assert.rejects(foreign.L.hydrate({accountId:'foreign-account',display:'Workspace test',tabId:1}),/another|invalid|not a valid snapshot/i);
+ console.log('PASS: passive cross-profile hydration, saved history, independent jobs, writer contention, one-shot API refresh, unchanged baseline, recent-catalog throttle, no backfill/original downloads, foreign account rejection');
+})().catch(e=>{console.error(e);process.exitCode=1;});

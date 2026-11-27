@@ -72,3 +72,10 @@ Issue #6: an abandoned anonymous writer claim can indefinitely block all workspa
 Issue #7 / TODO: before multi-provider implementation, split authoritative indexes into provider/workspace resources and derive the global inventory; audit lock ordering, shared data and migration. For now the old global mutable index still requires a global guard. The enable-monitoring permission probe is now outside that guard; deeper separation of network operations and disk transactions is deferred to rev.4. Existing provider adapter boundary and persisted archive schemas are unchanged.
 
 Hotfix parity: the original Beta 2 fixture remains unchanged. Its two checked synthetic metadata mtime offsets are now +4 (formerly +2) because each of the two writer claims has a JSON commit in addition to creation. Compared to rev.3, the only output differences are +2 on those two counters. See the hotfix test report.
+
+
+### Shared Workspace views (rev.3 hotfix 2)
+
+`lib/library-jobs.hydrate` loads the existing account-validated `_Library/_inventory.json` into profile-local display/cache state using a passive snapshot read, not a writer claim. An explicit Files view may subsequently schedule a one-shot incremental metadata check when due. No automatic first inventory, original-file retrieval, or monitor enrollment.
+
+`lib/workspace-activity.js` is a limited presentation receipt layer. `.activity-manual.json` and `.activity-library.json` are account/provider-bound, last-result summaries, published under the existing global writer guard with a reread/compare at commit. They are not job journals or executable checkpoints. Local active jobs remain authoritative. Rev.4 must move these resources into the scoped coordination model (issue #7).
