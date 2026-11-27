@@ -16,7 +16,13 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
  assert.equal((await invoke({type:'CAE_VAULT_READY',accountId:'account-one'})).ok,true);assert.deepEqual(routed,['account-one']);
  assert.equal(message({type:'CAE_VAULT_READY',accountId:'account-one'},{id:'self',tab:{id:1}},()=>{}),false);
  assert.equal(message({type:'CAE_VAULT_READY',accountId:'account-one'},{id:'other'},()=>{}),false);
- assert.equal((await invoke({type:'CAE_VAULT_DIAGNOSTICS',accountId:'account-one'},{id:'self',url:'chrome-extension://self/options.html?tab=8#tools',tab:{id:9},frameId:0})).result.events.length,0);
+ const originalProbe=C.probeAccess;let liveProbeCalled=false;
+ C.probeAccess=()=>{liveProbeCalled=true;return new Promise(()=>{});};
+ let timeout;
+ try {
+   const diagnostic=await Promise.race([invoke({type:'CAE_VAULT_DIAGNOSTICS',accountId:'account-one'},{id:'self',url:'chrome-extension://self/options.html?tab=8#tools',tab:{id:9},frameId:0}),new Promise((_,reject)=>{timeout=setTimeout(()=>reject(Error('Diagnostics blocked on live access probe')),1000);})]);
+   assert.equal(diagnostic.result.events.length,0);assert.equal(liveProbeCalled,false);
+ }finally{clearTimeout(timeout);C.probeAccess=originalProbe;}
  assert.equal(message({type:'CAE_VAULT_DIAGNOSTICS'},{id:'self',url:'https://chatgpt.com/',tab:{id:1,url:'https://chatgpt.com/'},frameId:0},()=>{}),false);
  assert.equal(message({type:'CAE_VAULT_DIAGNOSTICS'},{id:'self',url:'chrome-extension://self/offscreen.html'},()=>{}),false);
  const port={name:'cae-panel-lifecycle',sender:{id:'self',url:'chrome-extension://self/panel.html'},onMessage:event(),onDisconnect:event()};

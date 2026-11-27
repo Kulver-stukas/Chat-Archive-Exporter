@@ -22,5 +22,7 @@ const V=require('../lib/vault.js');
   let asked=0;
   const reject={queryPermission:async()=> 'prompt',requestPermission:async()=>{asked++;throw Object.assign(Error('Activation required'),{name:'SecurityError'});}};
   await assert.rejects(V.hasPermission(reject,true),{name:'SecurityError'});assert.equal(asked,1);
-  console.log('PASS: permission states, no passive requests, explicit action, denied/unsupported/error separated');
+  const hung={queryPermission:()=>new Promise(()=>{}),requestPermission:()=>{throw Error('Must never prompt passively');}};
+  assert.deepEqual(await V.permissionState(hung),{state:'error',errorName:'TimeoutError'});
+  console.log('PASS: bounded hung permission check; permission states, no passive requests, explicit action, denied/unsupported/error separated');
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -34,6 +34,19 @@ const send=(m,sender)=>new Promise(resolve=>{const ret=chrome.runtime.onMessage.
  const sender={id:'ext',url:'https://chatgpt.com/c/aaaaaaaa-1111-2222-3333-444444444444',tab:{id:11,windowId:1,url:'https://chatgpt.com/c/aaaaaaaa-1111-2222-3333-444444444444'},frameId:0};
  const ui={id:'ext',url:'chrome-extension://ext/options.html?tab=11#tools',tab:{id:12,url:'chrome-extension://ext/options.html'},frameId:0};
  assert.equal((await send({type:'CAE_UI_WIDGET_STATUS'},sender)).result.verified,true,'missing binding is recovered on demand');assert.equal(remote,1);
+ // Failure of Vault access must not erase a previously verified workspace.
+ ctx.ChatArchiveVault.restoreWorkspaceDirectory=async()=>({name:'Test Vault'});
+ ctx.ChatArchiveVault.permissionState=async()=>{throw Error('Permission backend unavailable');};
+ const unavailable=(await send({type:'CAE_UI_WIDGET_STATUS'},sender)).result;
+ assert.equal(unavailable.verified,true);assert.equal(unavailable.workspace,'Workspace');
+ assert.equal(unavailable.vaultPermission,'unknown');assert(unavailable.warning.includes('Vault'));
+ ctx.ChatArchiveVault.restoreWorkspaceDirectory=async()=>null;
+ const originalInspect=ctx.ChatArchiveLibraryJobs.inspect;
+ ctx.ChatArchiveLibraryJobs.inspect=async()=>{throw Error('Library state unavailable');};
+ const partial=(await send({type:'CAE_UI_WIDGET_STATUS'},sender)).result;
+ assert.equal(partial.verified,true);assert.equal(partial.librarySummary,'Unknown');
+ assert.equal(partial.monitoring,null);
+ ctx.ChatArchiveLibraryJobs.inspect=originalInspect;
  const initial=(await send({type:'CAE_UI_WIDGET_BIND'},sender)).result;
  assert(initial.verified);assert(initial.manualSummary.includes('Prepared, not saved'));assert(Array.isArray(initial.logs.manual));assert.equal(remote,1);
  for(let n=0;n<4;n++)await send({type:'CAE_UI_WIDGET_STATUS'},sender);assert.equal(remote,1,'cached state requests must not query provider');
