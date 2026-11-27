@@ -31,7 +31,8 @@ const send=(m,sender)=>new Promise(resolve=>{const ret=chrome.runtime.onMessage.
  chrome.storage.onChanged.fire({'cae.manual-status.v1':{}},'local');await wait();assert.equal(badges.at(-1),'IDLE');
  assert.equal(await send({type:'CAE_UI_WIDGET_BIND'},{id:'evil',tab:{id:11,url:'https://chatgpt.com/'},frameId:0}),null);
  assert.equal(await send({type:'CAE_UI_WIDGET_BIND'},{id:'ext',tab:{id:11,url:'https://example.com/'},frameId:0}),null);
- const sender={id:'ext',tab:{id:11,windowId:1,url:'https://chatgpt.com/c/aaaaaaaa-1111-2222-3333-444444444444'},frameId:0};
+ const sender={id:'ext',url:'https://chatgpt.com/c/aaaaaaaa-1111-2222-3333-444444444444',tab:{id:11,windowId:1,url:'https://chatgpt.com/c/aaaaaaaa-1111-2222-3333-444444444444'},frameId:0};
+ const ui={id:'ext',url:'chrome-extension://ext/options.html?tab=11#tools',tab:{id:12,url:'chrome-extension://ext/options.html'},frameId:0};
  assert.equal((await send({type:'CAE_UI_WIDGET_STATUS'},sender)).result.verified,true,'missing binding is recovered on demand');assert.equal(remote,1);
  const initial=(await send({type:'CAE_UI_WIDGET_BIND'},sender)).result;
  assert(initial.verified);assert(initial.manualSummary.includes('Prepared, not saved'));assert(Array.isArray(initial.logs.manual));assert.equal(remote,1);
@@ -40,12 +41,12 @@ const send=(m,sender)=>new Promise(resolve=>{const ret=chrome.runtime.onMessage.
    const afterFiveMinutes=(await send({type:'CAE_UI_WIDGET_STATUS'},sender)).result;
    assert(afterFiveMinutes.verified);assert.equal(remote,2,'expired scope binding must be reverified without Popup');
  }finally{Date.now=nativeNow;}
- const stored=(await send({type:'CAE_UI_CHAT_CACHE',accountId:'workspace',display:'Workspace'},{id:'ext'})).result;
+ const stored=(await send({type:'CAE_UI_CHAT_CACHE',accountId:'workspace',display:'Workspace'},ui)).result;
  assert.equal(stored.items[0].title,'Stored in Vault');assert.equal(stored.source,'Vault mirror');
  assert.equal(await send({type:'CAE_UI_CHAT_CACHE',accountId:'workspace',display:'Workspace'},sender),null,'page cannot access arbitrary workspace cache');
  await send({type:'CAE_UI_OPEN_PANEL',mode:'library'},sender);assert.deepEqual(opens,['intent','open']);
  await send({type:'CAE_UI_OPEN_PANEL',mode:'settings'},sender);assert.equal(lastIntent['cae.ui.intent.1'].mode,'settings');assert.deepEqual(opens,['intent','open','intent','open']);
- await send({type:'CAE_UI_TOGGLE_WIDGET',tabId:11},{id:'ext'});assert(widgetMessages.includes('CAE_UI_WIDGET_TOGGLE'));
+ await send({type:'CAE_UI_TOGGLE_WIDGET',tabId:11},ui);assert(widgetMessages.includes('CAE_UI_WIDGET_TOGGLE'));
  chrome.tabs.onUpdated.fire(11,{url:'https://chatgpt.com/'});assert.equal((await send({type:'CAE_UI_WIDGET_STATUS'},sender)).result.verified,true,'after a binding reset, STATUS alone restores it');assert.equal(remote,3);
  console.log('PASS: UI worker rebinds after worker/cache loss, native REC/IDLE badges, canceled Save neutrality, scoped sanitized monitor status, widget toggle, no core writes');
 })().catch(e=>{console.error(e);process.exitCode=1});

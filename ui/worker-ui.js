@@ -3,6 +3,23 @@
   'use strict';
   const U=root.CAEUIState,host=/^https:\/\/(chatgpt\.com|chat\.openai\.com)(\/|$)/i;
   const bindings=new Map(),verification=new Map();let iconTimer=null,iconBusy=false,iconAgain=false;
+  // Standalone tests load this module separately; keep the same strict boundary
+  // as worker.js, including options pages that have a sender.tab.
+  function contextOf(sender){
+    if(sender?.id!==chrome.runtime.id)return '';
+    const url=String(sender.url||'').split(/[?#]/)[0];
+    if(['panel.html','popup.html','options.html'].some(p=>url===chrome.runtime.getURL(p)))return 'ui';
+    if(Number.isInteger(sender.tab?.id)&&sender.frameId===0&&host.test(url)&&host.test(sender.tab.url||''))return 'chat';
+    return '';
+  }
+  async function bounded(stage,work,ms=6000){
+    let timer;
+    try{return await Promise.race([Promise.resolve().then(work),new Promise((_,reject)=>{
+      timer=setTimeout(()=>reject(Error(stage+' timed out.')),ms);
+    })]);}
+    catch(e){throw Object.assign(Error(stage+' unavailable.'),{code:e?.code||(/timed out/i.test(e?.message||'')?'TIMEOUT':'UNAVAILABLE')});}
+    finally{clearTimeout(timer);}
+  }
   const safeLine=v=>String(v??'').replace(/https?:\/\/\S+/gi,'[URL]').replace(/\bBearer\s+\S+/gi,'[credential]')
     .replace(/\b(?:sig|token|access_token)=[^&\s]+/gi,'[signature]').replace(/[\u0000-\u0008\u000b-\u001f]/g,' ').slice(0,360);
   const formatLogs=(entries,n=12)=>Array.isArray(entries)?entries.slice(-n).map(x=>{
@@ -11,11 +28,12 @@
   }).filter(Boolean):[];
   async function bindTab(tabId){
     const tab=await chrome.tabs.get(tabId);if(!host.test(tab?.url||'')||tab.discarded)throw Error('Open an authenticated ChatGPT tab.');
-    await root.ChatArchiveTabBootstrap.ensure(tabId);
-    const rpc=root.ChatArchiveSyncRPC.connect(tabId,18000);
+    const bridge=await bounded('ChatGPT bridge',()=>root.ChatArchiveTabBootstrap.ensure(tabId),8000);
+    if(bridge?.ok===false)throw Object.assign(Error('ChatGPT bridge unavailable.'),{code:'BRIDGE_UNAVAILABLE'});
+    const rpc=root.ChatArchiveSyncRPC.connect(tabId,25000);
     try{
       const s=await rpc.call('CAE_STATUS',{force:true});
-      if(!s.observed||!s.accountId)throw Error('Workspace could not be verified.');
+      if(!s.observed||!s.accountId)throw Object.assign(Error('Workspace could not be verified.'),{code:'WORKSPACE_UNVERIFIED'});
       const current=await chrome.tabs.get(tabId);if(current.url!==tab.url)throw Error('Tab changed during verification.');
       const b={accountId:s.accountId,display:String(s.display||'Workspace').slice(0,150),url:tab.url,at:Date.now()};
       bindings.set(tabId,b);return b;
@@ -38,18 +56,20 @@
     let b;
     try {b=await ensureBound(sender);}catch(e){return {verified:false,label:'Reconnecting',busy:false,
       monitoringSummary:'Workspace verification temporarily unavailable. Retrying automatically.',
-      reconnecting:true};}
+      connectionCode:['AUTH_REQUIRED','SESSION_TIMEOUT','NETWORK_ERROR','SESSION_INVALID_RESPONSE','WORKSPACE_UNVERIFIED','BRIDGE_UNAVAILABLE'].includes(e?.code)?e.code:'CONNECTION_UNAVAILABLE',reconnecting:true};}
     if(b.url!==sender.tab.url)return {verified:false,label:'Workspace changed',busy:false};
     const [manual,library,sync]=await Promise.all([
-      root.ChatArchiveManualJobs.inspect(),root.ChatArchiveLibraryJobs.inspect(b.accountId,false),root.ChatArchiveSync.inspect(b.accountId)]);
+      bounded('Manual job status',()=>root.ChatArchiveManualJobs.inspect()),
+      bounded('Library status',()=>root.ChatArchiveLibraryJobs.inspect(b.accountId,false)),
+      bounded('Monitoring status',()=>root.ChatArchiveSync.inspect(b.accountId))]);
     const m=manual?.accountId===b.accountId?manual:null;
     const a=U.activity(m,library,sync);
     const task=U.running(m)?{kind:'Chat export',done:m.chatsDone||0,total:m.totalChats||0}:U.running(library?.job)?
       {kind:library.job.kind==='archive'?'File archive':'Library inventory',done:library.job.files_done||library.job.checked||0,total:library.job.total_files||library.job.total_details||0}:null;
     let vault='Not connected',vaultPermission='no_handle';
-    const dir=await root.ChatArchiveVault.restoreWorkspaceDirectory(b.accountId).catch(()=>null);
+    const dir=await bounded('Vault handle lookup',()=>root.ChatArchiveVault.restoreWorkspaceDirectory(b.accountId));
     if(dir){
-      const p=await root.ChatArchiveVault.permissionState(dir).catch(()=>({state:'error'}));vaultPermission=p.state;
+      const p=await bounded('Vault permission check',()=>root.ChatArchiveVault.permissionState(dir));vaultPermission=p.state;
       const bgGranted=sync?.enabled&&sync?.access?.worker==='granted'&&sync?.access?.offscreen==='granted';
       vault=String(dir.name||'Vault')+(p.state==='granted'?' - Connected':bgGranted?' - Background connected (confirm here)':' - Confirmation required');
     }
@@ -67,13 +87,14 @@
     const C=root.CAEUIChatListCache;
     if(!C||!root.ChatArchiveLibraryStore.validId(accountId))throw Error('Invalid workspace.');
     const cfg=root.ChatArchiveSync._state?.()?.workspaces?.[accountId]||null;
-    const prefix=cfg?.prefix||root.ChatArchivePaths.createLayout(display).prefix;
+    let prefix=cfg?.prefix||root.ChatArchivePaths.createLayout(display).prefix;
     let ledger=null,mirror=null;
     // No permission prompt, migration or write. If this UI context cannot read
     // the user's Vault, try the already verified background mirror instead.
     try{
       const dir=await root.ChatArchiveVault.restoreWorkspaceDirectory(accountId);
       if(dir&&(await root.ChatArchiveVault.permissionState(dir))?.state==='granted'){
+        if(!cfg?.prefix)prefix=await root.ChatArchiveVault.resolveWorkspacePrefix(dir,prefix,accountId);
         ledger=await root.ChatArchiveVault.readJson(dir,root.ChatArchiveVault.workspaceIndexPath(prefix));
       }
     }catch(_e){}
@@ -125,8 +146,9 @@
   chrome.tabs.onUpdated?.addListener((id,change)=>{if(change.url||change.status==='loading'){bindings.delete(id);verification.delete(id);}});
   chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
     if(!message?.type?.startsWith('CAE_UI_')||sender.id!==chrome.runtime.id)return false;
-    const fromPage=!!sender.tab;
-    if(fromPage&&(!host.test(sender.tab.url||'')||sender.frameId!==0))return false;
+    const context=contextOf(sender);
+    if(!context||message.target)return false;
+    const fromPage=context==='chat';
     let work;
     try{
       if(message.type==='CAE_UI_BIND'&&!fromPage){

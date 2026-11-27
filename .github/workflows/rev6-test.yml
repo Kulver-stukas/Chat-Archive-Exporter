@@ -1,0 +1,25 @@
+name: Test rev.6 patch
+on:
+  push:
+    branches: ['fix/v0.1.9-rev6']
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Node regression suites
+        run: |
+          set -euo pipefail
+          for test in tests/*.test.js; do echo "::group::$test"; node "$test"; echo "::endgroup::"; done
+      - name: Syntax and package checks
+        run: |
+          set -euo pipefail
+          for js in *.js lib/*.js ui/*.js; do node --check "$js"; done
+          python3 tools/package_extension.py dist/chat-archive-exporter-v0.1.9-rev6-test.zip
+          python3 tools/package_store.py dist/chat-archive-exporter-v0.1.9-rev6-webstore-candidate.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chat-archive-exporter-v0.1.9-rev6
+          path: dist/*.zip

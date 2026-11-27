@@ -1,3 +1,12 @@
+## v0.1.9 rev.6 — Cold Start & Existing Vault Recovery (test)
+
+- Distinguish trusted extension UI documents (including the options tab) from top-level ChatGPT content scripts; maintain the existing permission and host allowlists.
+- Align connection deadlines with the session fetch, distinguish connection failures from Vault permissions, retry after network recovery, and report unknown rather than disabled status on failed reads.
+- Restore a verified existing workspace directory by immutable account ID, retain its original path, and require explicit per-profile opt-in. Reject ambiguous or foreign archive directories; no archive format migration or automatic enrollment.
+- Preserve a selected but not yet workspace-bound Vault as an explicit reconnect candidate. Export local, redacted connection diagnostics even if the worker does not respond.
+- Handle blocked Vault and Library IndexedDB opens. No new browser permissions, no automatic file permission requests. Cross-profile concurrent Vault writers remain unsupported.
+- Native authenticated Chrome and Edge acceptance testing is required before publishing Beta 3.
+
 ## v0.1.9 Beta 2 (2026-11-26)
 
 - Promote tested rev.5 (including rev.4 navigation, loading and layout improvements) to the public beta release.

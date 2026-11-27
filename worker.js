@@ -2,9 +2,23 @@ importScripts('lib/export-selection.js','lib/export-preferences.js','lib/normali
   'lib/vault.js','lib/vault-transfer.js','lib/sync-policy.js','lib/sync-spool.js','lib/sync-rpc.js','lib/vault-context.js','lib/vault-diagnostics.js','lib/sync.js','lib/tab-bootstrap.js','lib/manual-store.js','lib/manual-attachments.js','lib/manual-jobs.js',
   'lib/library-inventory.js','lib/library-policy.js','lib/library-store.js','lib/library-vault.js','lib/library-jobs.js');
 
+/* MessageSender.tab also exists for an extension options page in a normal tab.
+ * Require an allowlisted extension document or a top-level ChatGPT content
+ * script; the tab field alone is not an authorization boundary. */
+function caeMessageContext(sender) {
+  if (sender?.id !== chrome.runtime.id) return '';
+  const url=String(sender.url||'').split(/[?#]/)[0];
+  if (['panel.html','popup.html','options.html'].some(p=>url===chrome.runtime.getURL(p))) return 'ui';
+  const host=/^https:\/\/(chatgpt\.com|chat\.openai\.com)(\/|$)/i;
+  if (Number.isInteger(sender.tab?.id)&&sender.frameId===0&&host.test(url)&&host.test(sender.tab.url||'')) return 'chat';
+  return '';
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const context=caeMessageContext(sender);
+  if(!context||message?.target)return false;
   if(message?.type?.startsWith('CAE_EXPORT_PREFS_')){
-    if(sender.id!==chrome.runtime.id||sender.tab||message.target)return false;
+    if(context!=='ui')return false;
     const prefs=globalThis.ChatArchiveExportPreferences;
     const run=message.type==='CAE_EXPORT_PREFS_GET'?()=>prefs.get():
       message.type==='CAE_EXPORT_PREFS_PATCH'?()=>prefs.patch(message.patch):null;
@@ -13,7 +27,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       e=>sendResponse({ok:false,error:String(e?.message||e)}));return true;
   }
   if (message?.type?.startsWith('CAE_LIBRARY_JOB_')) {
-    if(sender.id !== chrome.runtime.id || sender.tab || message.target)return false;
+    if(context!=='ui')return false;
     const L=globalThis.ChatArchiveLibraryJobs;
     const actions={
       CAE_LIBRARY_JOB_START:()=>L.start(message.options||{}),
@@ -29,11 +43,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   // The manual controller accepts commands only from extension UI pages.
   if (message?.type?.startsWith('CAE_MANUAL_')) {
-    if (sender.id !== chrome.runtime.id || message.target) return false;
-    if (sender.tab && message.type !== 'CAE_MANUAL_QUICK') return false;
+    if(context!=='ui'&&message.type!=='CAE_MANUAL_QUICK')return false;
     const commands = {
       CAE_MANUAL_QUICK: async () => {
-        const tabId=sender.tab?.id ?? (await chrome.tabs.query({active:true,lastFocusedWindow:true}))[0]?.id;
+        const tabId=context==='chat'?sender.tab.id:(await chrome.tabs.query({active:true,lastFocusedWindow:true}))[0]?.id;
         return ChatArchiveManualJobs.quick(tabId);
       },
       CAE_MANUAL_SUBMIT: () => ChatArchiveManualJobs.submit(message.options),
@@ -47,8 +60,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       e => sendResponse({ok:false,error:String(e?.message||e)}));
     return true;
   }
-  if (sender.id && sender.id !== chrome.runtime.id) return false;
   if (message?.type === 'CAE_OPEN_PANEL') {
+    if(context!=='chat')return false;
     const tabId=sender.tab?.id;
     if(!tabId){sendResponse({ok:false,error:'ChatGPT tab not found.'});return false;}
     const opened=chrome.sidePanel.open({tabId});
@@ -58,7 +71,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const commands=new Set(['CAE_SYNC_ENABLE','CAE_SYNC_PAUSE','CAE_SYNC_STATUS','CAE_SYNC_WAKE','CAE_SYNC_HELLO','CAE_SYNC_SIGNAL','CAE_VAULT_READY','CAE_VAULT_DIAGNOSTICS','CAE_ENSURE_TAB']);
   if(!commands.has(message?.type))return false;
   // A content script can report activity, never enable sync or change its Vault.
-  if(sender.tab&&!['CAE_SYNC_HELLO','CAE_SYNC_SIGNAL'].includes(message.type))return false;
+  const signal=['CAE_SYNC_HELLO','CAE_SYNC_SIGNAL'].includes(message.type);
+  if(signal ? context!=='chat' : context!=='ui')return false;
   const operation=async()=>{
     if(message.type==='CAE_SYNC_ENABLE'){
       const result=await ChatArchiveSync.enable(message.options||{});
@@ -127,9 +141,10 @@ chrome.windows.onFocusChanged.addListener(async id=>{
   for(const t of tabs)ensureAndArm(t.id).catch(()=>{});
 });
 const startBackground=async()=>{
-  await ChatArchiveSync.startup();
-  await ChatArchiveManualJobs.startup();
-  await globalThis.ChatArchiveLibraryJobs?.startup();
+  // A failed controller must not suppress recovery of the other two.
+  await ChatArchiveSync.startup().catch(e=>console.warn('CAE sync startup:',e?.name||'Error'));
+  await ChatArchiveManualJobs.startup().catch(e=>console.warn('CAE manual startup:',e?.name||'Error'));
+  await globalThis.ChatArchiveLibraryJobs?.startup().catch(e=>console.warn('CAE library startup:',e?.name||'Error'));
 };
 chrome.runtime.onStartup.addListener(()=>startBackground().catch(console.warn));
 chrome.runtime.onInstalled.addListener(info=>{
@@ -144,7 +159,7 @@ startBackground().catch(console.warn);
 // artificial keepalive; there are no heartbeats. A dormant worker can restart.
 chrome.runtime.onConnect.addListener(port=>{
   if(port.name!=='cae-panel-lifecycle'||port.sender?.id!==chrome.runtime.id||
-    String(port.sender?.url||'').split('?')[0]!==chrome.runtime.getURL('panel.html'))return;
+    caeMessageContext(port.sender)!=='ui')return;
   let account=null,lastSignature='',lastAt=0;
   port.onMessage.addListener(msg=>{
     if(msg?.type!=='bind'||typeof msg.accountId!=='string'||!/^[a-zA-Z0-9_-]{3,120}$/.test(msg.accountId))return;

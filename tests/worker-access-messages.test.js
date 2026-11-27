@@ -12,11 +12,13 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
  const s={chrome,console,ChatArchiveManualJobs:{startup:async()=>{},resume:async()=>{},downloadChanged:async()=>{},ALARM:'manual'},ChatArchiveSync:C,ChatArchiveVaultDiagnostics:{report:async()=>({events:[]})},importScripts(){}};
  vm.runInNewContext(fs.readFileSync(__dirname+'/../worker.js','utf8'),s);
  const message=chrome.runtime.onMessage.listeners[0],connect=chrome.runtime.onConnect.listeners[0];
- const invoke=(msg,sender={id:'self'})=>new Promise(resolve=>{assert.equal(message(msg,sender,resolve),true);});
+ const invoke=(msg,sender={id:'self',url:'chrome-extension://self/panel.html'})=>new Promise(resolve=>{assert.equal(message(msg,sender,resolve),true);});
  assert.equal((await invoke({type:'CAE_VAULT_READY',accountId:'account-one'})).ok,true);assert.deepEqual(routed,['account-one']);
  assert.equal(message({type:'CAE_VAULT_READY',accountId:'account-one'},{id:'self',tab:{id:1}},()=>{}),false);
  assert.equal(message({type:'CAE_VAULT_READY',accountId:'account-one'},{id:'other'},()=>{}),false);
- assert.equal((await invoke({type:'CAE_VAULT_DIAGNOSTICS',accountId:'account-one'})).result.events.length,0);
+ assert.equal((await invoke({type:'CAE_VAULT_DIAGNOSTICS',accountId:'account-one'},{id:'self',url:'chrome-extension://self/options.html?tab=8#tools',tab:{id:9},frameId:0})).result.events.length,0);
+ assert.equal(message({type:'CAE_VAULT_DIAGNOSTICS'},{id:'self',url:'https://chatgpt.com/',tab:{id:1,url:'https://chatgpt.com/'},frameId:0},()=>{}),false);
+ assert.equal(message({type:'CAE_VAULT_DIAGNOSTICS'},{id:'self',url:'chrome-extension://self/offscreen.html'},()=>{}),false);
  const port={name:'cae-panel-lifecycle',sender:{id:'self',url:'chrome-extension://self/panel.html'},onMessage:event(),onDisconnect:event()};
  connect(port);assert.equal(port.onMessage.listeners.length,1);
  port.onMessage.listeners[0]({type:'bind',accountId:'account-one',permission:'granted'});

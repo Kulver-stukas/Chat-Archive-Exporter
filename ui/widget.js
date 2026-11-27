@@ -31,9 +31,9 @@ progress{width:100%;accent-color:#176f61;margin:3px 0}[hidden]{display:none!impo
     <div id="monitoring" class="field muted">Monitoring status unavailable.</div>
     <div id="vault" class="field">Vault: Not verified</div>
     <div class="divider"></div>
-    <div class="field"><b>Manual export:</b><div id="manual">No manual export recorded.</div></div>
-    <div class="field"><b>Library task:</b><div id="library">No Library task recorded.</div></div>
-    <div class="field"><b>Chat monitoring:</b><div id="sync">Off</div><div id="since" class="muted"></div><div id="syncMessage" class="muted"></div></div>
+    <div class="field"><b>Manual export:</b><div id="manual">Unknown</div></div>
+    <div class="field"><b>Library task:</b><div id="library">Unknown</div></div>
+    <div class="field"><b>Chat monitoring:</b><div id="sync">Unknown</div><div id="since" class="muted"></div><div id="syncMessage" class="muted"></div></div>
     <progress id="bar" hidden></progress>
     <button id="logsToggle" title="Show or hide export, inventory and monitoring logs." class="log-button" aria-expanded="false">Show logs ▾</button>
     <div id="long" class="logs" hidden>
@@ -54,7 +54,17 @@ progress{width:100%;accent-color:#176f61;margin:3px 0}[hidden]{display:none!impo
   }
   const get=id=>shadow?.getElementById(id);
   const put=(id,value)=>{const e=get(id);if(e)e.textContent=String(value??'');};
-  async function send(type,data={}){const r=await chrome.runtime.sendMessage({type,...data});if(!r?.ok)throw Error(r?.error||'Extension unavailable');return r.result;}
+  async function send(type,data={}){
+    let timeout;
+    const request=chrome.runtime.sendMessage({type,...data});
+    try{
+      const readOnly=['CAE_UI_WIDGET_BIND','CAE_UI_WIDGET_STATUS'].includes(type);
+      const r=readOnly?await Promise.race([request,new Promise((_,reject)=>{
+        timeout=setTimeout(()=>reject(Error('Controller status request timed out.')),60000);
+      })]):await request;
+      if(!r?.ok)throw Error(r?.error||'Extension unavailable');return r.result;
+    }finally{clearTimeout(timeout);}
+  }
   function remove(){host?.remove();host=null;shadow=null;shown=false;lastGood=null;suppressLegacy();}
   async function closeWidget(){dismissed=true;manualShow=false;remove();
     if(prefs.widgetEnabled){prefs={...prefs,widgetEnabled:false};await chrome.storage.local.set({[KEY]:prefs});}
@@ -74,8 +84,8 @@ progress{width:100%;accent-color:#176f61;margin:3px 0}[hidden]{display:none!impo
     put('workspace',verified?v.workspace:v?.scope_stale?v.workspace+' (last verified)':'Workspace not verified');
     put('state',v?.label||'Idle');put('monitoring',v?.monitoringSummary||'Monitoring status unavailable.');
     put('vault','Vault: '+(v?.vault||'Not verified'));
-    put('manual',v?.manualSummary||'No manual export recorded.');put('library',v?.librarySummary||'No Library task recorded.');
-    put('sync',v?.syncSummary||'Off');
+    put('manual',v?.manualSummary||(verified?'No manual export recorded.':'Unknown'));put('library',v?.librarySummary||(verified?'No Library task recorded.':'Unknown'));
+    put('sync',v?.syncSummary||(verified?'Off':'Unknown'));
     put('since',v?.syncVault?`Vault: ${v.syncVault}${v.syncSince?' · Since: '+new Date(v.syncSince).toLocaleString():''}`:'');
     put('syncMessage',v?.syncMessage||'');
     for(const [id,key] of [['manualLog','manual'],['inventoryLog','inventory'],['monitoringLog','monitoring']]){
@@ -90,12 +100,12 @@ progress{width:100%;accent-color:#176f61;margin:3px 0}[hidden]{display:none!impo
       const result=await send(verify?'CAE_UI_WIDGET_BIND':'CAE_UI_WIDGET_STATUS');
       if(result?.verified){lastGood=result;render(result);put('error','');}
       else if(lastGood&&result?.reconnecting){
-        render({...lastGood,label:'Reconnecting…',icon:'base',busy:false,canExport:false,
-          monitoringSummary:'Cached status shown; rechecking workspace identity.'});
+        render({verified:false,scope_stale:true,workspace:lastGood.workspace,label:'Reconnecting…',
+          monitoringSummary:'Status unknown; rechecking workspace identity.'});
         put('error','Connection temporarily unavailable. Will retry.');
-      }else{lastGood=null;render(result);}
+      }else{lastGood=null;render(result);put('error',result?.connectionCode||'');}
     }catch(e){
-      if(lastGood)render({...lastGood,label:'Connection interrupted',icon:'base',busy:false,canExport:false});
+      if(lastGood)render({verified:false,scope_stale:true,workspace:lastGood.workspace,label:'Connection interrupted'});
       else render({verified:false,label:'Status unavailable'});
       showError(e);
     }
@@ -146,6 +156,7 @@ progress{width:100%;accent-color:#176f61;margin:3px 0}[hidden]{display:none!impo
   suppressLegacy();chrome.runtime.onMessage.addListener(incoming);chrome.storage.onChanged.addListener(changes);
   document.addEventListener('visibilitychange',visible);window.addEventListener('focus',focus);
   window.addEventListener('resize',place);window.addEventListener('popstate',navigation);
+  window.addEventListener('online',()=>update(true));
   if(window.navigation)window.navigation.addEventListener('navigatesuccess',navigation);
   const life=setInterval(()=>{try{if(!chrome.runtime.id)throw Error();if(document.visibilityState==='visible')navigation();}
     catch{dead=true;clearInterval(life);clearInterval(statusTicker);remove();}},3000);

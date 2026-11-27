@@ -91,7 +91,8 @@ async function drain(C){for(let n=0;n<30;n++){await C.tick();const c=C._state()?
  const seed=s.ChatArchiveMeta.renderWorkspaceConfiguration({active_scope:{account_id:account},
    projects:[],projects_complete:true},'2026-11-09T20:00:00Z');
  await vault.writeText(configPath,seed,{kind:'metadata',key:account+'|'+configPath});
- await C.enable({...opts,enrollment:'tracked_and_new'});
+ await C.enable({...opts,display:'Workspace account fallback',enrollment:'tracked_and_new'});
+ assert.equal(C._state().workspaces[account].prefix,layout.prefix,'reconnect existing configuration under changed display name');
  assert.equal((await C.inspect(account)).enabled,true,'configuration-only seed can enable background tracking');
  await C.pause(account);await new Promise(r=>setImmediate(r));
  await vault.writeText(layout.chatPath(archived),markdown(archived),{kind:'chats',key:account+'|'+archived.id,remoteChat:archived});

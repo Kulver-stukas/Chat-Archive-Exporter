@@ -10,10 +10,11 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
  const route=chrome.runtime.onMessage.listeners[0];const invoke=(msg,sender={id:'self',url:'chrome-extension://self/panel.html'})=>new Promise(resolve=>assert.equal(route(msg,sender,resolve),true));
  await invoke({type:'CAE_MANUAL_SUBMIT',options:{requestId:'job12345'}});assert(called.some(([k,a])=>k==='submit'&&a.requestId==='job12345'));
  for(const type of ['CAE_MANUAL_SUBMIT','CAE_MANUAL_CANCEL','CAE_MANUAL_RETRY','CAE_MANUAL_STATUS','CAE_MANUAL_WAKE']){
-  assert.equal(route({type,options:{}},{id:'self',tab:{id:3}},()=>{}),false);
+  assert.equal(route({type,options:{}},{id:'self',url:'https://chatgpt.com/',frameId:0,tab:{id:3,url:'https://chatgpt.com/'}},()=>{}),false);
   assert.equal(route({type},{id:'other'},()=>{}),false);
  }
- await invoke({type:'CAE_MANUAL_QUICK',tabId:999,accountId:'forged'},{id:'self',tab:{id:3}});assert(called.some(([k,a])=>k==='quick'&&a===3));
+ await invoke({type:'CAE_MANUAL_QUICK',tabId:999,accountId:'forged'},{id:'self',url:'https://chatgpt.com/',frameId:0,tab:{id:3,url:'https://chatgpt.com/'}});assert(called.some(([k,a])=>k==='quick'&&a===3));
+ await invoke({type:'CAE_MANUAL_STATUS'},{id:'self',url:'chrome-extension://self/options.html?tab=7#tools',tab:{id:9,url:'chrome-extension://self/options.html'},frameId:0});
  await invoke({type:'CAE_MANUAL_QUICK',tabId:999});assert(called.some(([k,a])=>k==='quick'&&a===7));
  assert.equal(route({type:'CAE_MANUAL_PREPARE',target:'cae-manual-output'},{id:'self'},()=>{}),false);
  chrome.alarms.onAlarm.listeners[0]({name:'manual'});chrome.downloads.onChanged.listeners[0]({id:4,state:{current:'complete'}});
