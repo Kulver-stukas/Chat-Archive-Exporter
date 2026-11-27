@@ -578,8 +578,8 @@
       state.library=null;state.libraryAccountId=null;state.libraryJob=null;state.librarySelected.clear();state.libraryCatalogRevision=-1;
     }
     const previousAccount=state.lastVerifiedWorkspace?.accountId;
-    if(previousAccount&&previousAccount!==scope.accountId){state.selected.clear();state.selectedProjects.clear();state.chats=[];state.projects=[];state.listAccountId=null;state.listLoadedAt=0;state.listSource=null;state.sync=null;state.librarySelected.clear();}
-    state.scope = scope;state.currentContextPending=false;state.lastConnectionCode=null;
+    if(previousAccount&&previousAccount!==scope.accountId){state.selected.clear();state.selectedProjects.clear();state.chats=[];state.projects=[];state.listAccountId=null;state.listLoadedAt=0;state.listSource=null;state.sync=null;state.syncLoaded=false;state.librarySelected.clear();}
+    state.scope = scope;state.directory=null;state.lastConnectionCode=null;
     chrome.runtime.sendMessage({type:'CAE_UI_BIND',tabId:tab.id,accountId:scope.accountId,display:scope.display,observed:scope.observed}).catch(()=>{});
     if(state.mode==='library')renderLibrary();
     rememberVerifiedWorkspace(scope,tab);
@@ -592,6 +592,7 @@
       await refreshVaultStatus();
     } catch (error) { log('WARNING: Workspace Vault status: ' + error.message); }
     if(context!==contextGeneration||state.port!==activePort)return null;
+    state.currentContextPending=false;
     $('scope').textContent = `${scope.display} · ${scope.accountId ? scope.accountId.slice(0, 8) : 'account not identified'}`;
     refreshButtons();
     if(manualJob?.active)showManual(manualJob);else status('Connected.');
@@ -611,7 +612,7 @@
     }).catch(error => {
       if(context!==contextGeneration)return null;
       state.lastConnectionCode=connectionCode(error);disconnect();state.scope=null;state.currentContextPending=true;state.syncLoaded=false;
-      $('scope').textContent='Workspace not verified';refreshButtons();updateSyncApply();
+      $('scope').textContent='Workspace not verified';$('syncStatus').textContent='Monitoring status unknown until workspace is verified.';refreshButtons();updateSyncApply();
       if (auto) {
         state.nextAutoAttempt = Date.now() + Math.min(30000, 1500 * 2 ** Math.min(++state.autoFailures, 4));
         status('ChatGPT connection pending ('+state.lastConnectionCode+'). Retrying when available.');

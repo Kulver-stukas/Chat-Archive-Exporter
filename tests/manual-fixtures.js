@@ -5,7 +5,7 @@ const {createFakeIndexedDB}=require('./fake-idb');
 let mtime=0;
 class Missing extends Error{constructor(){super('Missing');this.name='NotFoundError';}}
 class FH{
- constructor(name){this.name=name;this.bytes=new Uint8Array();this.mtime=++mtime;}
+ constructor(name){this.kind='file';this.name=name;this.bytes=new Uint8Array();this.mtime=++mtime;}
  async getFile(){const b=new Blob([this.bytes]);b.lastModified=this.mtime;return b;}
  async createWritable(){const chunks=[],that=this;return {
    write:async x=>chunks.push(typeof x==='string'?new TextEncoder().encode(x):new Uint8Array(x)),
@@ -14,7 +14,8 @@ class FH{
  };}
 }
 class Dir{
- constructor(name='Vault'){this.name=name;this.children=new Map();this.granted=true;}
+ constructor(name='Vault'){this.kind='directory';this.name=name;this.children=new Map();this.granted=true;}
+ async *entries(){yield* this.children.entries();}
  async getDirectoryHandle(name,opt={}){if(!this.children.has(name)){if(!opt.create)throw new Missing();this.children.set(name,new Dir(name));}return this.children.get(name);}
  async getFileHandle(name,opt={}){if(!this.children.has(name)){if(!opt.create)throw new Missing();this.children.set(name,new FH(name));}return this.children.get(name);}
  async removeEntry(name){if(!this.children.delete(name))throw new Missing();}
