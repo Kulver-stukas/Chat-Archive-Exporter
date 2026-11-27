@@ -24,7 +24,7 @@ const sandbox={window:{},document:{cookie:''},location:{origin:'https://chatgpt.
   }
 };
 vm.createContext(sandbox);require('./provider-bootstrap').boot(sandbox);
-for(const f of ['lib/config-inventory.js','lib/api.js'])vm.runInContext(fs.readFileSync(path.join(base,f),'utf8'),sandbox);
+for(const f of ['providers/chatgpt/config-inventory.js','providers/chatgpt/api.js'])vm.runInContext(fs.readFileSync(path.join(base,f),'utf8'),sandbox);
 (async()=>{
  const api=sandbox.window.ChatArchiveApi;
  const r=await api.getWorkspaceSnapshot(A,()=>{},{includeConfiguration:true});

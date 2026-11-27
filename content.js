@@ -49,7 +49,7 @@
               ? await providerApi.assetLocation(msg.fileId, msg.expectedAccountId || '', abort.signal)
               : await providerApi.sourceLocation(msg.fileId, msg.projectId, msg.expectedAccountId || '', abort.signal, Boolean(msg.background));
             if (abort.signal.aborted || disconnected) throw new Error('Source transfer cancelled.');
-            transfer = ChatArchiveSourceTransfer.createTransport({ timeoutMs: vaultTransfer ? 20 * 60_000 : 120000 });
+            transfer = ChatArchiveSourceTransfer.createTransport({ authorize: globalThis.ChatArchiveChatGPTOriginalPolicy, timeoutMs: vaultTransfer ? 20 * 60_000 : 120000 });
             send(msg.id, { result: await transfer.open({ ...location, maxBytes: msg.maxBytes, signal: abort.signal }) });
           } catch (error) { await closeSource(); throw error; }
         } else if (msg.type === 'CAE_SOURCE_READ') {

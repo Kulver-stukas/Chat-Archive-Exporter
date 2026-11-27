@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const sandbox={window:{},URL,Map,Set};vm.createContext(sandbox);
-vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../lib/library-inventory.js'),'utf8'),sandbox);
+vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../providers/chatgpt/library-inventory.js'),'utf8'),sandbox);
 const I=sandbox.window.ChatArchiveLibraryInventory;
 const file='file_00000000abcdef000000001111111111';
 assert.equal(I.fileFromGallery({id:'s_hello',url:'https://chatgpt.com/backend-api/estuary/content?id='+file+'&sig=PRIVATE'}),file);

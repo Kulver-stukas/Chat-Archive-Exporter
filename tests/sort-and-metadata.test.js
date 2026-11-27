@@ -63,7 +63,7 @@ const noPrefs=meta.entries({ ...context, personalization: null },'Business');
 assert.equal(noPrefs.length,4);
 
 // API transport mock: one sidebar, one connector scopes, one personalization call.
-const apiCode=fs.readFileSync(path.join(__dirname,'../lib/api.js'),'utf8');
+const apiCode=fs.readFileSync(path.join(__dirname,'../providers/chatgpt/api.js'),'utf8');
 const requested=[];
 const apiSession={ accessToken:'private-test-token', account:{id:'business-scope',name:'Business'} };
 const mockFetch=async (url,options={}) => {
@@ -79,7 +79,7 @@ const mockFetch=async (url,options={}) => {
 };
 const sandbox={window:{},document:{cookie:''},location:{origin:'https://chatgpt.com',pathname:'/c/11111111-1111-1111-1111-111111111111'},
   fetch:mockFetch, Date, Set,Map,console,AbortSignal,URL,setTimeout,clearTimeout};
-vm.runInContext(apiCode,require('./provider-bootstrap').boot(sandbox),{filename:'lib/api.js'});
+vm.runInContext(apiCode,require('./provider-bootstrap').boot(sandbox),{filename:'providers/chatgpt/api.js'});
 assert.equal(requested.length,0,'API does not run until invoked');
 (async()=>{
   const result=await sandbox.window.ChatArchiveApi.getWorkspaceSnapshot('business-scope');

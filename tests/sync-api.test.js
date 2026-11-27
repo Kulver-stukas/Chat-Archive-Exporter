@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
-const source=fs.readFileSync(path.join(__dirname,'../lib/api.js'),'utf8');
+const source=fs.readFileSync(path.join(__dirname,'../providers/chatgpt/api.js'),'utf8');
 const pid='g-p-11111111111111111111111111111111',account='account-one';
 function make(responder){
   let clock=Date.parse('2026-11-09T20:00:00Z');const calls=[];

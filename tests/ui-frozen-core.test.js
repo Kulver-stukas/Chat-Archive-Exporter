@@ -7,13 +7,13 @@ const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const approvedChanges=new Set(['lib/manual-jobs.js','lib/library-inventory.js','lib/library-jobs.js',
  'lib/library-policy.js','lib/library-vault.js','lib/paths.js','lib/sync.js',
  'lib/vault-transfer.js','lib/vault.js','lib/normalize.js','lib/manual-output.js',
- 'lib/api.js','content.js','lib/tab-bootstrap.js','sync-watch.js','lib/library-store.js','lib/vault-context.js','lib/vault-diagnostics.js','offscreen.js']);
+ 'lib/api.js','lib/config-inventory.js','lib/source-transfer.js','content.js','lib/tab-bootstrap.js','sync-watch.js','lib/library-store.js','lib/vault-context.js','lib/vault-diagnostics.js','offscreen.js','offscreen.html']);
 for(const [file,sha] of Object.entries(baseline.archive_core)){
   const actual=hash(fs.readFileSync(path.join(root,file)));
   if(approvedChanges.has(file))assert.notEqual(actual,sha,'Expected approved technical delta: '+file);
   else assert.equal(actual,sha,'Unexpected technical change outside v0.1.8/v0.1.9 scope: '+file);
 }
 // The merged worker intentionally changes authorization and startup; pin the reviewed implementation.
-assert.equal(hash(fs.readFileSync(path.join(root,'worker.js'))),'a88bdb36db7a3a87d7f821666e0f9ab5c483a177279ecac9d5b61457b8cf2898');
+assert.equal(hash(fs.readFileSync(path.join(root,'worker.js'))),'0857b59b2f2aab071952ff5c9488ef677b5b860d97c7de3908488dc971d72583');
 const m=require('../manifest.json');assert.deepEqual(m.permissions,baseline.permissions);assert.deepEqual(m.host_permissions,baseline.host_permissions);assert.equal(m.minimum_chrome_version,'116');
 console.log('PASS: explicit integrity/selection delta allowlist, unrelated core and worker routes unchanged, no permission expansion');

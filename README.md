@@ -1,6 +1,12 @@
-# Chat Archive Exporter — v0.2.0 rev.1 (architecture preview)
+# Chat Archive Exporter — v0.2.0 rev.3 hotfix (architecture preview)
 
-Internal test build, functionally based on v0.1.9 Beta 2. See [architecture](ARCHITECTURE_v0.2.0.md), [release notes](RELEASE_NOTES_v0.2.0-rev1.md) and [test report](TEST_REPORT_v0.2.0-rev1.md). The public Beta 2 remains unchanged; this build is not published.
+Internal ChatGPT-only test build (manifest 0.2.0.4). Writer-claim recovery is described in RELEASE_NOTES_v0.2.0-rev3-hotfix.md and UAT_v0.2.0-rev3-hotfix.md. Issues #6 and #7 track the defect and storage architecture.  The confirmed rev.2 source snapshot is on GitHub in `dev/v0.2`; rev.3 separates the ChatGPT adapter from common rendering and byte transfer. See [architecture](ARCHITECTURE_v0.2.0.md), [release notes](RELEASE_NOTES_v0.2.0-rev3.md), [test report](TEST_REPORT_v0.2.0-rev3.md) and [UAT](UAT_v0.2.0-rev3.md). The public v0.1.9.8 beta is maintained separately on `v0.1`. Rev.3 is not a store submission or GitHub release.
+
+Install the preview by replacing the files of the existing unpacked rev.2 directory, reload the extension, and refresh the ChatGPT tab. Keep local storage and Vault. No new provider, permission, host or persisted-format change.
+
+The public installation listing is [Chrome Web Store](https://chromewebstore.google.com/detail/chat-archive-exporter-bet/jpnelmkbbgpjfnpldfecjffhidffdpjb). Its currently available version is independent of this preview.
+
+The following sections are historical documentation; status and upgrade statements are superseded by the preview information above.
 
 ---
 

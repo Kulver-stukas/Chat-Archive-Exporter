@@ -30,7 +30,7 @@ const testContext={window:{},location:{origin:'https://chatgpt.com',pathname:'/c
     return Response.json(data);
   }
 };
-vm.createContext(testContext);require('./provider-bootstrap').boot(testContext);vm.runInContext(fs.readFileSync(path.join(base,'lib/api.js'),'utf8'),testContext);
+vm.createContext(testContext);require('./provider-bootstrap').boot(testContext);vm.runInContext(fs.readFileSync(path.join(base,'providers/chatgpt/api.js'),'utf8'),testContext);
 (async()=>{
  const api=testContext.window.ChatArchiveApi;
  const result=await api.listAll();

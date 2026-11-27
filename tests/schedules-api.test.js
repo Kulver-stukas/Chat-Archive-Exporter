@@ -24,7 +24,7 @@ const sandbox={window:{},location:{origin:'https://chatgpt.com',pathname:'/'},do
    throw Error('Unexpected API request '+url);
  }};
 vm.createContext(sandbox);require('./provider-bootstrap').boot(sandbox);
-for(const f of ['lib/config-inventory.js','lib/api.js'])vm.runInContext(fs.readFileSync(path.join(base,f),'utf8'),sandbox);
+for(const f of ['providers/chatgpt/config-inventory.js','providers/chatgpt/api.js'])vm.runInContext(fs.readFileSync(path.join(base,f),'utf8'),sandbox);
 (async()=>{
  const api=sandbox.window.ChatArchiveApi;
  const config=await api.getWorkspaceSnapshot(account,()=>{}, {includeConfiguration:true});

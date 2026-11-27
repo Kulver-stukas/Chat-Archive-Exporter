@@ -54,7 +54,7 @@ with sync_playwright() as p:
   page.expose_function('backend',backend)
   page.set_content(html);page.add_style_tag(content=(root/'styles.css').read_text());page.add_script_tag(content=mock)
   page.evaluate('(v)=>__granted=v',granted)
-  page.add_script_tag(content=(root/'lib/normalize.js').read_text())
+  for f in ['lib/markdown-primitives.js', 'providers/chatgpt/markdown-profile.js', 'lib/markdown.js', 'lib/normalize.js']:page.add_script_tag(content=(root/f).read_text())
   page.add_script_tag(content=(root/'lib/paths.js').read_text())
   for provider_file in ('contracts/provider.js','providers/chatgpt/descriptor.js','providers/registry.js'):
       page.add_script_tag(content=(root/provider_file).read_text())

@@ -15,7 +15,7 @@ const box={window:{},document:{cookie:''},location:{origin:'https://chatgpt.com'
    if(p.startsWith('/backend-api/'))throw Error('No other workspace endpoint may be queried after a session switch: '+p);
    throw Error('Unexpected call');
  }};
-vm.createContext(box);require('./provider-bootstrap').boot(box);for(const f of ['lib/config-inventory.js','lib/api.js'])vm.runInContext(fs.readFileSync(path.join(base,f),'utf8'),box);
+vm.createContext(box);require('./provider-bootstrap').boot(box);for(const f of ['providers/chatgpt/config-inventory.js','providers/chatgpt/api.js'])vm.runInContext(fs.readFileSync(path.join(base,f),'utf8'),box);
 (async()=>{
  await assert.rejects(box.window.ChatArchiveApi.listAll(),/Workspace changed|workspace/i);
  assert.equal(requests.filter(x=>x.p.startsWith('/backend-api/')).length,1,'no backend calls after user account switch');

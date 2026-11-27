@@ -34,7 +34,7 @@ const sandbox={window:{},location:{origin:'https://chatgpt.com',pathname:'/libra
     return Response.json(responses[url]);
   }};
 vm.createContext(sandbox);require('./provider-bootstrap').boot(sandbox);
-for(const filename of ['lib/library-inventory.js','lib/config-inventory.js','lib/api.js'])
+for(const filename of ['providers/chatgpt/library-inventory.js','providers/chatgpt/config-inventory.js','providers/chatgpt/api.js'])
   vm.runInContext(fs.readFileSync(path.join(base,filename),'utf8'),sandbox);
 (async()=>{
   const progress=[];

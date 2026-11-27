@@ -45,7 +45,7 @@ with sync_playwright() as p:
   page.set_content(html);page.add_style_tag(content=(root/'styles.css').read_text())
   page.add_script_tag(content='const iconmap='+json.dumps(icons)+';const srcprop=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,"src");Object.defineProperty(HTMLImageElement.prototype,"src",{get:srcprop.get,set(v){srcprop.set.call(this,iconmap[v]||v)}});if(!crypto.randomUUID)crypto.randomUUID=()=>"aaaaaaaa-bbbb-cccc-dddd-"+String(Math.random()).slice(2,14);')
   page.add_script_tag(content=fixture)
-  for f in ['contracts/provider.js','providers/chatgpt/descriptor.js','providers/registry.js','lib/export-selection.js','lib/normalize.js','lib/hash.js','lib/paths.js','lib/sort.js','ui/state.js','ui/tree.js','ui/chat-list-cache.js','panel.js']:page.add_script_tag(content=(root/f).read_text())
+  for f in ['contracts/provider.js','providers/chatgpt/descriptor.js','providers/registry.js','lib/export-selection.js','lib/markdown-primitives.js','providers/chatgpt/markdown-profile.js','lib/markdown.js','lib/normalize.js','lib/hash.js','lib/paths.js','lib/sort.js','ui/state.js','ui/tree.js','ui/chat-list-cache.js','panel.js']:page.add_script_tag(content=(root/f).read_text())
   page.wait_for_function("document.querySelector('#scope').textContent.includes('Test workspace') && !document.querySelector('#exportCurrent').disabled")
   wait_read=lambda i:page.wait_for_function(f'__ui.held.some(x=>x.id===__ui.ids[{i}])')
   deliver=lambda i:page.evaluate(f'__ui.deliver(__ui.ids[{i}])')

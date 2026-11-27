@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Chat Archive Exporter BETA",
   "description": "ChatGPT Markdown and original-source export to Vault, with opt-in workspace-scoped background updates.",
-  "version": "0.2.0.2",
+  "version": "0.2.0.4",
   "minimum_chrome_version": "116",
   "permissions": [
     "sidePanel",
@@ -42,11 +42,15 @@
         "providers/chatgpt/descriptor.js",
         "providers/registry.js",
         "lib/export-selection.js",
-        "lib/normalize.js",
-        "lib/config-inventory.js",
+        "lib/markdown-primitives.js",
+        "providers/chatgpt/markdown-profile.js",
+        "providers/chatgpt/normalize.js",
+        "providers/chatgpt/config-inventory.js",
+        "providers/chatgpt/original-policy.js",
         "lib/source-transfer.js",
-        "lib/library-inventory.js",
-        "lib/api.js",
+        "providers/chatgpt/library-inventory.js",
+        "providers/chatgpt/http.js",
+        "providers/chatgpt/api.js",
         "content.js",
         "sync-watch.js",
         "ui/widget.js"
@@ -54,7 +58,7 @@
       "run_at": "document_idle"
     }
   ],
-  "version_name": "0.2.0 rev.2 (architecture preview)",
+  "version_name": "0.2.0 rev.3 hotfix (architecture preview)",
   "icons": {
     "16": "icons/cae-base-16.png",
     "32": "icons/cae-base-32.png",

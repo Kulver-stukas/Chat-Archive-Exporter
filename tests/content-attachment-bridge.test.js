@@ -1,6 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const T=require('../lib/source-transfer');
+const authorize=require('../providers/chatgpt/original-policy');
 let connect,opened=0,retired=0,observed;
 const bytes=new Uint8Array([0,1,127,128,255]);
 const box={location:{pathname:'/c/11111111-1111-1111-1111-111111111111'},
@@ -14,7 +15,7 @@ const box={location:{pathname:'/c/11111111-1111-1111-1111-111111111111'},
     return {downloadUrl:'https://chatgpt.com/backend-api/estuary/content?sig=PRIVATE',origin:'https://chatgpt.com',
       headers:{Authorization:'Bearer PRIVATE'}};
   }},
-  ChatArchiveSourceTransfer:{createTransport:()=>T.createTransport({fetchImpl:async(_url,opts)=>{
+  ChatArchiveSourceTransfer:{createTransport:()=>T.createTransport({authorize,fetchImpl:async(_url,opts)=>{
     opened++;assert.equal(opts.headers.Authorization,'Bearer PRIVATE');return new Response(bytes);
   }})}};
 vm.runInContext(fs.readFileSync(__dirname+'/../content.js','utf8'),require('./provider-bootstrap').boot(box));

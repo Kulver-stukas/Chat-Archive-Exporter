@@ -22,7 +22,7 @@
   const descriptor=C.defineProvider({id:'chatgpt',displayName:'ChatGPT',hostPatterns:hosts,matchesUrl,
     accountInfo,conversationId,routeProjectId,observedConversationId,observedProjectId,
     // Declarative and recovery injection use the same ordered bridge files.
-    bridgeFiles:['contracts/provider.js','providers/chatgpt/descriptor.js','providers/registry.js','lib/export-selection.js','lib/normalize.js','lib/config-inventory.js','lib/source-transfer.js','lib/library-inventory.js','lib/api.js','content.js','sync-watch.js'],
+    bridgeFiles:['contracts/provider.js','providers/chatgpt/descriptor.js','providers/registry.js','lib/export-selection.js','lib/markdown-primitives.js','providers/chatgpt/markdown-profile.js','providers/chatgpt/normalize.js','providers/chatgpt/config-inventory.js','providers/chatgpt/original-policy.js','lib/source-transfer.js','providers/chatgpt/library-inventory.js','providers/chatgpt/http.js','providers/chatgpt/api.js','content.js','sync-watch.js'],
     operations:C.knownOperations,
     capabilities:{conversations:true,projects:true,customGpts:true,library:true,images:true,configuration:true,schedules:true,backgroundMonitoring:true,selectiveExport:true,originals:true,visibleThinking:true}});
   root.ChatArchiveChatGPTDescriptor=descriptor;

@@ -1,11 +1,12 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const T=require('../lib/source-transfer');
+const authorize=require('../providers/chatgpt/original-policy');
 let connect;let opens=0;
 const sandbox={window:{addEventListener(){}},location:{pathname:'/'},document:{body:{},visibilityState:'visible',readyState:'complete',getElementById(){return null;},addEventListener(){}},
  chrome:{runtime:{id:'this-extension',onConnect:{addListener(fn){connect=fn;}}}},
  setInterval(){},setTimeout,clearTimeout,AbortController,console,
  ChatArchiveApi:{sourceLocation:async()=>({downloadUrl:'https://chatgpt.com/backend-api/estuary/content?id=file_x&sig=TOP_SECRET',origin:'https://chatgpt.com',headers:{Authorization:'Bearer TOP_SECRET'}})},
- ChatArchiveSourceTransfer:{createTransport:()=>T.createTransport({fetchImpl:async()=>{opens++;return new Response(new Uint8Array(500000).fill(255));}})}};
+ ChatArchiveSourceTransfer:{createTransport:()=>T.createTransport({authorize,fetchImpl:async()=>{opens++;return new Response(new Uint8Array(500000).fill(255));}})}};
 vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../content.js'),'utf8'),require('./provider-bootstrap').boot(sandbox));
 const event=()=>({callbacks:[],addListener(fn){this.callbacks.push(fn);}});
 function port(id='this-extension'){

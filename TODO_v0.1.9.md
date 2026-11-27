@@ -47,3 +47,12 @@
 Загрузка требует точного соответствия workspace, conversation, message и locator свежим данным текущей ветки. Оригиналы с `file_id` разрешаются существующим файловым маршрутом. Для sandbox-файлов применяется GET `/backend-api/conversation/{conversation_id}/interpreter/download` с `message_id`, `sandbox_path` и `download_intent=true`; результатом должен быть `download_url`. Ответ 403/404/410 или отсутствие URL даёт явный недоступный результат, без поиска по соседним сообщениям, другим workspace или совпадающим именам.
 
 Контракт sandbox-маршрута проверен по первичной реализации `get_response_file_url` в `lanqian528/chat2api`, файлу `chatgpt/ChatService.py`, и авторскому описанию наблюдаемого поведения в `Ma-XX-oN/DownloadConversation`, issue 78. Это внутренний веб-маршрут, а не обещание стабильности публичного API. Первичные материалы: https://github.com/lanqian528/chat2api/blob/main/chatgpt/ChatService.py ; https://github.com/Ma-XX-oN/DownloadConversation/issues/78 .
+
+
+## P0 architecture backlog — shared Vault resources (GitHub #7; relates to #5 and #6)
+
+- [ ] Define canonical `(provider_id, workspace_id, resource_id)` identity and audit actual read/write sets of every controller. Keep legacy ChatGPT paths and identifiers until deliberate migration.
+- [ ] Move authoritative mutable source/metadata indexes from `ChatGPT/.chat-archive/index.json` into provider/workspace-scoped ledgers. Use a derived, rebuildable global inventory or a narrowly scoped transaction for genuinely shared resources.
+- [ ] Decouple network capture from read-modify-write transactions; reread and validate current indexes before commit, preserve checksums, pending operations and local edits.
+- [ ] Implement resource-level coordination with deterministic acquisition order and crash recovery. Keep the global guard until all remaining shared writers are migrated. Never infer foreign process death from elapsed time alone.
+- [ ] Verify migration rollback, old archives, two browsers on one workspace, different workspaces and different providers. Avoid cloud replicas and unsupported old concurrent writers. No Memory extraction. Target rev.4 storage design before introducing another provider.

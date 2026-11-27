@@ -29,7 +29,7 @@ function environment(){
     }};
   box.window=box;
   vm.createContext(box);require('./provider-bootstrap').boot(box);
-  for(const f of ['export-selection','normalize','library-inventory','api'])
+  for(const f of ['export-selection','normalize','../providers/chatgpt/library-inventory','../providers/chatgpt/api'])
     vm.runInContext(fs.readFileSync(__dirname+'/../lib/'+f+'.js','utf8'),box);
   e.api=box.ChatArchiveApi;
   e.refs=()=>box.ChatArchiveExportSelection.attachments(box.ChatArchiveNormalize.normalizeChat(e.raw),{});

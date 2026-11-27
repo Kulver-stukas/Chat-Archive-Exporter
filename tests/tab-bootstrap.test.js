@@ -14,7 +14,7 @@ const chrome={
  },
  scripting:{executeScript:async x=>{
    installs++;
-   assert.deepEqual(Array.from(x.files),[...require('./provider-bootstrap').files,'lib/export-selection.js','lib/normalize.js','lib/config-inventory.js','lib/source-transfer.js','lib/library-inventory.js','lib/api.js','content.js','sync-watch.js']);
+   assert.deepEqual(Array.from(x.files),[...require('./provider-bootstrap').files,'lib/export-selection.js','lib/markdown-primitives.js','providers/chatgpt/markdown-profile.js','providers/chatgpt/normalize.js','providers/chatgpt/config-inventory.js','providers/chatgpt/original-policy.js','lib/source-transfer.js','providers/chatgpt/library-inventory.js','providers/chatgpt/http.js','providers/chatgpt/api.js','content.js','sync-watch.js']);
    assert.equal(x.world,'ISOLATED');assert.equal(x.target.frameIds[0],0);
    active.add(x.target.tabId);
  }}

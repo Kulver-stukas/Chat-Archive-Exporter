@@ -33,7 +33,7 @@ function instance(){
   indexedDB:fakeIDB.indexedDB,IDBKeyRange:fakeIDB.IDBKeyRange,navigator:{locks},crypto:require('node:crypto').webcrypto,
   setTimeout:(fn,ms)=>{if(ms===2000){now+=ms;queueMicrotask(fn);}return 1;},clearTimeout(){}};
  vm.createContext(sandbox);require('./provider-bootstrap').boot(sandbox);
- for(const f of ['normalize','config-inventory','hash','paths','meta','sources','vault','vault-transfer','sync-policy','sync-spool'])vm.runInContext(fs.readFileSync(path.join(base,'lib/'+f+'.js'),'utf8'),sandbox);
+ for(const f of ['normalize','../providers/chatgpt/config-inventory','hash','paths','meta','sources','vault','vault-transfer','sync-policy','sync-spool'])vm.runInContext(fs.readFileSync(path.join(base,'lib/'+f+'.js'),'utf8'),sandbox);
  sandbox.ChatArchiveVault.rememberDirectory=async h=>db.set('selected',h);
  sandbox.ChatArchiveVault.restoreDirectory=async()=>db.get('selected')||null;
  sandbox.ChatArchiveVault.rememberWorkspaceDirectory=async(a,h)=>db.set(a,h);

@@ -5,14 +5,14 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const expected=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/v0.1.9-beta.2-parity.json'),'utf8'));
 const actual=JSON.parse(cp.execFileSync(process.execPath,[path.join(__dirname,'parity-capture.js'),path.resolve(__dirname,'..')],{encoding:'utf8',timeout:30000,maxBuffer:8*1024*1024}));
 // The fake filesystem advances an integer clock on each file creation. Two
-// writer claims now exist before metadata files are created, then are removed.
+// writer claims are created and their JSON is committed before metadata files are created.
 // Allow precisely that observed test-clock delta, not arbitrary index changes.
 const indexPath='ChatGPT/.chat-archive/index.json';
 const oldIndex=JSON.parse(Buffer.from(expected.vault[indexPath],'base64'));
 const newIndex=JSON.parse(Buffer.from(actual.vault[indexPath],'base64'));
 const keys=Object.keys(oldIndex.metadata);assert.equal(keys.length,2);
 for(const key of keys){
- assert.equal(newIndex.metadata[key].local_last_modified,oldIndex.metadata[key].local_last_modified+2,'Expected claim-creation clock offset: '+key);
+ assert.equal(newIndex.metadata[key].local_last_modified,oldIndex.metadata[key].local_last_modified+4,'Expected claim-creation and JSON commit clock offset: '+key);
  newIndex.metadata[key].local_last_modified=oldIndex.metadata[key].local_last_modified;
 }
 actual.vault[indexPath]=Buffer.from(JSON.stringify(newIndex,null,2)+'\n').toString('base64');

@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const code=fs.readFileSync(require('node:path').join(__dirname,'../lib/api.js'),'utf8');
+const code=fs.readFileSync(require('node:path').join(__dirname,'../providers/chatgpt/api.js'),'utf8');
 const calls=[];
 const sandbox={window:{},document:{cookie:''},location:{origin:'https://chatgpt.com',pathname:'/c/11111111-1111-1111-1111-111111111111'},
  Date,Set,Map,console,URL,AbortSignal,setTimeout,clearTimeout,

@@ -1,3 +1,17 @@
+## v0.2.0 rev.3 hotfix (manifest 0.2.0.4) — recover abandoned writer claims
+
+- Issue #6: identify each installation and write operation, recover own abandoned markers under local exclusive Web Lock, preserve jobs and archive indexes.
+- Review legacy/foreign claims in Tools; require explicit confirmation that other writers are stopped, reject changed snapshots, and report redacted claim diagnostics and VAULT_BUSY.
+- Keep existing shared index protection and compatible writer filenames. No new permissions or archive migration. Move enable-monitoring access probe outside the claim; broader resource separation tracked in #7 and TODO.
+
+## v0.2.0 rev.3 — ChatGPT adapter extraction (2026-11-28)
+
+- Split authenticated HTTP/session/cooldown from ChatGPT operations; relocate raw conversation/configuration/Library conversion and original URL policy into `providers/chatgpt/`.
+- Extract pure Markdown primitives and profile-driven normalized renderer; retain existing selection behavior and byte-identical legacy presentation.
+- Make bounded source transfer require an explicit provider authorization policy. Keep credentials and original locators in the isolated tab and preserve existing RPC shape.
+- Update manifest, recovery injection, worker/UI/offscreen load order and fixture loaders. No new permissions, providers, archive schema, endpoint, or user feature.
+- Preserve original Beta 2 fixtures; add exact rev.2 runtime delta and module-boundary checks. Job/transport/storage and UI decomposition remain for later revisions.
+
 ## v0.2.0 rev.2 — Architecture preview / rev.6–8 integration (2026-11-27)
 
 - Port the cumulative v0.1.9 rev.6, rev.7 and rev.8 fixes while retaining the rev.1 provider contracts, registry, ChatGPT descriptor and RPC facade.

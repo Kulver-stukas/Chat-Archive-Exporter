@@ -10,7 +10,7 @@ function createLibraryEnvironment(){
   e.prefix='ChatGPT/Workspace test';
   e.reload=()=>{
     reload();
-    for(const f of ['library-inventory','library-policy','library-store','library-vault'])
+    for(const f of ['../providers/chatgpt/library-inventory','library-policy','library-store','library-vault'])
       vm.runInContext(fs.readFileSync(path.join(base,'lib/'+f+'.js'),'utf8'),e.box);
     e.LS=e.box.ChatArchiveLibraryStore;
     e.LS.bind=async(id,dir)=>e.libHandles.set(id,dir);

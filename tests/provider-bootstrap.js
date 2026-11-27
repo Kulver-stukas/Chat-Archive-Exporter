@@ -5,6 +5,7 @@ const files=['contracts/provider.js','providers/chatgpt/descriptor.js','provider
 function boot(context){
   if(!vm.isContext(context))vm.createContext(context);
   if(!context.ChatArchiveProviders)for(const file of files)vm.runInContext(fs.readFileSync(path.join(__dirname,'..',file),'utf8'),context,{filename:file});
+  for(const file of ["lib/markdown-primitives.js", "providers/chatgpt/markdown-profile.js", "lib/markdown.js", "providers/chatgpt/normalize.js", "lib/normalize.js", "providers/chatgpt/config-inventory.js", "providers/chatgpt/library-inventory.js", "providers/chatgpt/http.js", "providers/chatgpt/original-policy.js"])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',file),'utf8'),context,{filename:file});
   return context;
 }
 module.exports={boot,files};
