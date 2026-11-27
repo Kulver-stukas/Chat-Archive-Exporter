@@ -39,12 +39,13 @@
       holderInstance:instance, retainedCount:retained.size, errorName:result.errorName || null};
     if (result.state === 'granted' && (!entry.indexProbed || refresh || previous !== 'granted')) {
       try {
-        const item = await ChatArchiveVault.lookupFile(entry.dir, ChatArchiveVault.INDEX_PATH);
+        const within=(p)=>ChatArchiveVault.deadline?ChatArchiveVault.deadline(p,4000,'Offscreen index probe'):p;
+        const item = await within(ChatArchiveVault.lookupFile(entry.dir, ChatArchiveVault.INDEX_PATH));
         entry.hasIndex = !!item;
         if (item) {
-          const file = await item.handle.getFile();
+          const file = await within(item.handle.getFile());
           // A real, bounded Blob read. Do not retain Blob/index contents in RAM.
-          await file.slice(0,32).arrayBuffer();
+          await within(file.slice(0,32).arrayBuffer());
         }
         entry.indexProbed = true;
         entry.indexError = null;

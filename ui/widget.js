@@ -18,6 +18,7 @@ button:hover{background:#e7f3ef}button:focus-visible{outline:2px solid #168674;o
 .log{background:#f3f5f6;border:1px solid #dce2e4;padding:5px;border-radius:7px;font:10px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;max-height:72px;min-height:30px;overflow:auto;margin:0}
 .buttons{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap}.buttons button{flex:1}.error{color:#a42c2c;overflow-wrap:anywhere;margin:5px 0 0}
 progress{width:100%;accent-color:#176f61;margin:3px 0}[hidden]{display:none!important}
+button.required-action{background:#a65300!important;color:#fff!important;border-color:#a65300!important}button.required-action:hover{background:#854200!important}
 @media(max-height:600px){.field{margin-top:3px}.log{max-height:52px}.body{padding:6px}.buttons button{padding:4px 5px}.box{max-height:calc(100dvh - 8px)}}
 @media(prefers-color-scheme:dark){:host{color:#e6eded;color-scheme:dark}.box,button{background:#222a2e;border-color:#475359}.head{background:#293637}.muted,.workspace{color:#aebdbf}.log{background:#1b2429;border-color:#475359}.log-button{background:#30433c}.divider{background:#46535b}.error{color:#ffb4b4}}
 :host([data-theme=dark]){color:#e6eded;color-scheme:dark}:host([data-theme=dark]) .box,:host([data-theme=dark]) button{background:#222a2e;border-color:#475359}:host([data-theme=dark]) .head{background:#293637}:host([data-theme=dark]) .workspace,:host([data-theme=dark]) .muted{color:#aebdbf}:host([data-theme=dark]) .log{background:#1b2429;border-color:#475359}:host([data-theme=dark]) .divider{background:#46535b}
@@ -91,6 +92,7 @@ progress{width:100%;accent-color:#176f61;margin:3px 0}[hidden]{display:none!impo
     for(const [id,key] of [['manualLog','manual'],['inventoryLog','inventory'],['monitoringLog','monitoring']]){
       const lines=v?.logs?.[key];put(id,Array.isArray(lines)&&lines.length?lines.join('\n'):'No recent entries.');
     }
+    get('settings').classList.toggle('required-action',!verified||['prompt','denied','error','unknown','unsupported','no_handle'].includes(v?.vaultPermission));
     const bar=get('bar');bar.hidden=!v?.task?.total;if(!bar.hidden){bar.max=Math.max(1,v.task.total);bar.value=v.task.done||0;}
   }
   async function update(verify=false){
@@ -98,7 +100,7 @@ progress{width:100%;accent-color:#176f61;margin:3px 0}[hidden]{display:none!impo
     pending=true;
     try{
       const result=await send(verify?'CAE_UI_WIDGET_BIND':'CAE_UI_WIDGET_STATUS');
-      if(result?.verified){lastGood=result;render(result);put('error','');}
+      if(result?.verified){lastGood=result;render(result);put('error',result.warning||'');}
       else if(lastGood&&result?.reconnecting){
         render({verified:false,scope_stale:true,workspace:lastGood.workspace,label:'Reconnecting…',
           monitoringSummary:'Status unknown; rechecking workspace identity.'});

@@ -7,7 +7,7 @@ const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const approvedChanges=new Set(['lib/manual-jobs.js','lib/library-inventory.js','lib/library-jobs.js',
  'lib/library-policy.js','lib/library-vault.js','lib/paths.js','lib/sync.js',
  'lib/vault-transfer.js','lib/vault.js','lib/normalize.js','lib/manual-output.js',
- 'lib/api.js','content.js','lib/tab-bootstrap.js','lib/library-store.js']);
+ 'lib/api.js','content.js','lib/tab-bootstrap.js','lib/library-store.js','lib/vault-context.js','lib/vault-diagnostics.js','offscreen.js']);
 for(const [file,sha] of Object.entries(baseline.archive_core)){
   const actual=hash(fs.readFileSync(path.join(root,file)));
   if(approvedChanges.has(file))assert.notEqual(actual,sha,'Expected approved technical delta: '+file);
@@ -15,6 +15,6 @@ for(const [file,sha] of Object.entries(baseline.archive_core)){
 }
 // rev.6 deliberately changes message authorization and startup handling. Freeze
 // this reviewed worker while retaining the prior core/permission baseline.
-assert.equal(hash(fs.readFileSync(path.join(root,'worker.js'))),'c23eaa3c9c0525768fa09d993870529b0655a5d2184c883c3f8d80d1387cc7bb');
+assert.equal(hash(fs.readFileSync(path.join(root,'worker.js'))),'92fc0b30cfbc135f89d06c684e5bebe751427f5bbb48cb918d86beea4b0d0f37');
 const m=require('../manifest.json');assert.deepEqual(m.permissions,baseline.permissions);assert.deepEqual(m.host_permissions,baseline.host_permissions);assert.equal(m.minimum_chrome_version,'116');
-console.log('PASS: explicit integrity/selection delta allowlist, unrelated core unchanged and reviewed rev.6 worker, no permission expansion');
+console.log('PASS: explicit integrity/selection delta allowlist, unrelated core unchanged and reviewed rev.7 worker, no permission expansion');

@@ -88,7 +88,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return result;
     }
     if(message.type==='CAE_VAULT_DIAGNOSTICS'){
-      await ChatArchiveSync.probeAccess(message.accountId,'export_diagnostics').catch(()=>{});
+      // Diagnostics are intentionally passive, even if every Vault IPC is stuck.
       return await ChatArchiveVaultDiagnostics.report();
     }
     if(message.type==='CAE_SYNC_STATUS')return await ChatArchiveSync.inspect(message.accountId);
@@ -142,9 +142,7 @@ chrome.windows.onFocusChanged.addListener(async id=>{
 });
 const startBackground=async()=>{
   // A failed controller must not suppress recovery of the other two.
-  await ChatArchiveSync.startup().catch(e=>console.warn('CAE sync startup:',e?.name||'Error'));
-  await ChatArchiveManualJobs.startup().catch(e=>console.warn('CAE manual startup:',e?.name||'Error'));
-  await globalThis.ChatArchiveLibraryJobs?.startup().catch(e=>console.warn('CAE library startup:',e?.name||'Error'));
+  await Promise.allSettled([ChatArchiveSync.startup(),ChatArchiveManualJobs.startup(),globalThis.ChatArchiveLibraryJobs?.startup()]);
 };
 chrome.runtime.onStartup.addListener(()=>startBackground().catch(console.warn));
 chrome.runtime.onInstalled.addListener(info=>{

@@ -85,6 +85,9 @@
     $('headerReconnect').classList.toggle('hidden',!selected||verified&&!!state.directory&&state.vaultPermission==='granted');
     $('headerReconnect').textContent=state.directory?'Reconnect Vault':'Connect Vault';
     $('headerReconnect').disabled=!verified;
+    $('reconnect').classList.toggle('required-action',!verified);
+    $('toolsReconnectVault').classList.toggle('required-action',state.vaultPermission!=='granted');
+    $('pickFolder').classList.toggle('required-action',!state.directory);
     $('headerReconnect').title=verified?'Connect or restore this selected Vault.':'Reconnect ChatGPT first; the workspace must be verified.';
     $('quickVault').disabled=state.busy||state.currentContextPending||!state.port||!state.scope?.observed||!state.scope.currentId||!state.directory;
     $('showWidget').disabled=!state.scope?.observed||!state.tab;
@@ -109,7 +112,7 @@
   function applyPreferences(){
     document.documentElement.dataset.theme=prefs.theme;
     $('themeSelect').value=prefs.theme;$('autoClosePanel').checked=prefs.autoClosePanel;
-    $('widgetEnabled').checked=prefs.widgetEnabled;$('libraryMonitorOnStart').checked=prefs.monitorOnStart;
+    $('widgetEnabled').checked=prefs.widgetEnabled;if(!pendingRestore())$('libraryMonitorOnStart').checked=prefs.monitorOnStart;
     uiRefresh();
   }
   function exportCategoriesSelected(){return EXPORT_FIELDS.some(k=>exportPrefs[k]);}
@@ -207,6 +210,7 @@
       // not arrived yet; a newer event received first takes precedence.
       acceptExportPreferences(value);
       applyExportPreferences();
+      persistPortable({export:exportPrefs}).catch(e=>log('WARNING: Portable export settings: '+e.message));
     }catch(error){
       exportPrefsReady=false;await ensureExportPreferences().catch(()=>{});throw error;
     }finally{exportPrefsPending--;refreshButtons();}
@@ -797,8 +801,9 @@
     const j=state.libraryJob,active=!!j?.job?.active,verified=state.scope?.observed&&state.scope?.accountId===libraryAccount();
     $('libraryStop').disabled=!(active||j?.enabled);
     $('libraryResume').classList.toggle('hidden',!j?.job||!['waiting_for_tab','permission_required','error','retry_wait','cooldown'].includes(j.job.status));
-    $('libraryMonitor').disabled=!j?.baseline_at||active||!verified;
-    $('libraryMonitor').checked=!!j?.enabled;
+    const pending=pendingRestore();
+    $('libraryMonitor').disabled=active||!verified||!(pending?restored.saved.hasInventory:j?.baseline_at);
+    if(!pending)$('libraryMonitor').checked=!!j?.enabled;
     $('libraryPickVault').disabled=active||!!j?.enabled||!!state.sync?.enabled||state.busy;
     $('libraryGrantVault').classList.toggle('hidden',!state.directory||state.vaultPermission==='granted');
     $('libraryVaultName').textContent=state.directory?`Vault: ${state.directory.name} (${state.vaultPermission})`:'Choose a Vault before starting.';
@@ -926,7 +931,7 @@
       // Ignore a stale async result from a different workspace/directory.
       if(dir!==state.directory||account!==state.scope?.accountId)return;
       const previous=state.vaultPermission;
-      state.vaultPermission=permission.state;
+      state.vaultPermission=permission.state;state.vaultErrorName=permission.errorName||null;
       const labels={
         granted:'write access available',
         prompt:'browser confirmation required to write; queued work is retained',
@@ -961,20 +966,20 @@
   }
   async function selectFolder() {
     if (manualJob?.active || state.sync?.enabled || state.libraryJob?.enabled || state.libraryJob?.job?.active) throw new Error('Pause background updates and Library jobs before changing the Vault.');
-    if(SURFACE==='popup'){openOptions('settings');status('Use Choose Vault in the persistent settings tab.');return;}
+    if(SURFACE==='popup'){openPanel('settings');return;}
     if (typeof window.showDirectoryPicker !== 'function')
       throw new Error('Directory picker unavailable. Use Chrome with File System Access support.');
     // Picker must be invoked directly from the click gesture, before other awaits.
     const account=state.scope?.observed&&!state.currentContextPending?state.scope.accountId:null,context=contextGeneration;
     const dir = await window.showDirectoryPicker({ id: 'chat-archive-exporter-vault', mode: 'readwrite' });
-    state.vaultCandidate=dir;
+    restored=null;restoreChecked=null;state.vaultCandidate=dir;
     if(account&&context===contextGeneration&&state.scope?.accountId===account&&!state.currentContextPending){
       await ChatArchiveVault.rememberWorkspaceDirectory(account,dir);
       if(context===contextGeneration&&state.scope?.accountId===account)state.directory=dir;
     }else if(!state.scope?.observed)state.directory=null;
     try { await ChatArchiveVault.rememberDirectory(dir); }
     catch (e) { log('WARNING: This Vault can be used now, but its folder handle could not be remembered: ' + e.message); }
-    await refreshVaultStatus();refreshLibraryControls();
+    await refreshVaultStatus();refreshLibraryControls();await discoverPreferences();
     status(state.directory===dir?'Vault selected. Existing files and indexes will be reused.':'Vault selected. Verify ChatGPT and connect it to this workspace.');
   }
   async function grantVaultAccess() {
@@ -992,7 +997,7 @@
     if(state.sync?.enabled)await retainGrantedVault();
     await syncCommand('CAE_MANUAL_WAKE',{accountId:state.scope?.accountId}).catch(()=>{});
     if(libraryAccount())await syncCommand('CAE_LIBRARY_JOB_RESUME',{accountId:libraryAccount()}).catch(()=>{});
-    refreshLibraryControls();
+    refreshLibraryControls();await discoverPreferences();
     status('Vault write access granted; accepted jobs may resume.');
   }
   function downloadBlob(blob, name) {
@@ -1148,6 +1153,36 @@
       return response.result;
     }catch(e){state.lastControllerCode=connectionCode(e);state.lastControllerCommand=type;throw e;}
   }
+  var restored=null,restoreLoading=null,restoreChecked=null,applyingRestored=false;
+  function pendingRestore(){return restored&&restored.account===state.scope?.accountId&&restored.dir===state.directory;}
+  async function discoverPreferences(){
+    if(!globalThis.CAEPortablePreferences||!state.scope?.observed||state.currentContextPending||!state.directory||state.vaultPermission!=='granted'||!state.syncLoaded)return;
+    const dir=state.directory,account=state.scope.accountId,display=state.scope.display;
+    if(restoreLoading||restoreChecked?.dir===dir&&restoreChecked?.account===account||pendingRestore())return;
+    if(state.sync?.startedAt||state.sync?.enabled||state.libraryJob?.enabled)return;
+    const p=(async()=>{
+      const saved=await deadline(CAEPortablePreferences.read(dir,account,display),'Saved preferences',10000);
+      if(state.directory!==dir||state.scope?.accountId!==account||state.currentContextPending)return;
+      const key='cae.preferences.confirmed.'+account;
+      const local=await chrome.storage.local.get(key);
+      if(state.directory!==dir||state.scope?.accountId!==account)return;
+      restoreChecked={dir,account};
+      if(local[key]||!saved.chat&&!saved.library&&!saved.export)return;
+      restored={dir,account,saved};
+      if(saved.chat){$('syncEnabled').checked=saved.chat.enabled;$('syncScope').value=saved.chat.scope;$('syncEnrollment').value=saved.chat.enrollment;$('syncSources').checked=saved.chat.sources;}
+      if(saved.library){$('libraryMonitorOnStart').checked=saved.library.monitorOnStart;$('libraryMonitor').checked=saved.library.enabled&&saved.hasInventory;}
+      $('restoreHint').textContent='Saved workspace settings restored. Confirm to activate monitoring in this browser. Stop other writers to the same Vault first.';
+      $('restoreHint').classList.remove('hidden');updateSyncApply();refreshLibraryControls();
+    })().catch(e=>log('WARNING: Saved preferences unavailable: '+e.message)).finally(()=>{if(restoreLoading===p)restoreLoading=null;});
+    restoreLoading=p;return p;
+  }
+  async function persistPortable(patch){
+    if(!globalThis.CAEPortablePreferences||!state.scope?.observed||state.currentContextPending||!state.directory||state.vaultPermission!=='granted'||pendingRestore())return;
+    const account=state.scope.accountId,dir=state.directory,display=state.scope.display;
+    const saved=await CAEPortablePreferences.read(dir,account,display);
+    if(!saved.chat&&!saved.hasInventory&&!state.sync?.startedAt)return;
+    await CAEPortablePreferences.write(dir,account,display,patch);
+  }
   function syncForm() {
     return {enabled:$('syncEnabled').checked,scope:$('syncScope').value,
       enrollment:$('syncEnrollment').value,sources:$('syncSources').checked};
@@ -1158,6 +1193,7 @@
   }
   function isSyncDirty(c=state.sync) {
     if(!state.syncLoaded)return false;
+    if(pendingRestore())return true;
     const desired=syncForm(), saved=syncSaved(c);
     if(desired.enabled!==saved.enabled)return true;
     if(!desired.enabled)return false;
@@ -1166,8 +1202,11 @@
   function updateSyncApply() {
     const enabled=!!state.sync?.enabled;
     const editable=state.syncLoaded&&canEditSync(state.syncAccountId);
-    $('syncApply').textContent=enabled?'Apply changes':'Apply / enable';
-    $('syncApply').disabled=state.busy||!editable||!isSyncDirty();
+    const pending=pendingRestore();
+    $('syncApply').textContent=pending?'Apply restored settings':enabled?'Apply changes':'Apply / enable';
+    $('syncApply').classList.toggle('required-action',!!pending);
+    $('syncApply').disabled=applyingRestored||state.busy||!editable||!isSyncDirty();
+    if(!pending)$('restoreHint').classList.add('hidden');
     $('syncPause').disabled=!editable||!enabled;
     for(const id of ['syncEnabled','syncScope','syncEnrollment','syncSources'])
       $(id).disabled=state.busy||!editable;
@@ -1188,7 +1227,7 @@
     state.syncAccountId=accountId;
     state.syncLoaded=true;
     // Preserve unsaved changes even if focus moved off the select/checkbox.
-    if(!preserveEdits){
+    if(!preserveEdits&&!pendingRestore()){
       $('syncEnabled').checked=!!c.enabled;
       $('syncScope').value=c.scope||'active';
       $('syncEnrollment').value=c.enrollment||'tracked';
@@ -1206,13 +1245,17 @@
     $('syncLog').textContent=(c.logs||[]).map(x=>`[${new Date(x.at).toLocaleTimeString()}] ${x.level}: ${x.message}`).join('\n');
     $('syncLog').classList.toggle('hidden',!(c.logs||[]).length);
     updateSyncApply();uiRefresh();
-    refreshVaultStatus().catch(()=>{});
+    refreshVaultStatus().then(()=>discoverPreferences()).catch(()=>{});
   }
   async function applySync() {
     if(state.busy)throw new Error('Finish the current export first.');
     if(!state.scope?.observed||!state.scope?.accountId)throw new Error('Connect to a verified workspace first.');
     if(!isSyncDirty())return;
     $('syncApply').disabled=true;
+    const pending=pendingRestore()?restored:null;
+    const binding={account:state.scope.accountId,dir:state.directory,tabId:state.tab?.id,display:state.scope.display};
+    const libraryDesired=$('libraryMonitor').checked,monitorOnStart=$('libraryMonitorOnStart').checked;
+    applyingRestored=!!pending;
     try{
       if(!$('syncEnabled').checked){await syncCommand('CAE_SYNC_PAUSE',{accountId:state.scope.accountId});}
       else{
@@ -1226,8 +1269,21 @@
         await syncCommand('CAE_SYNC_ENABLE',{options:{accountId:scope.accountId,display:scope.display,
           tabId,scope:settings.scope,enrollment:settings.enrollment,sources:settings.sources}});
       }
+      if(pending){
+        if(state.scope?.accountId!==binding.account||state.directory!==binding.dir||state.currentContextPending)throw Error('Workspace changed during confirmation.');
+        if(pending.saved.hasInventory){
+          await ChatArchiveLibraryStore.bind(binding.account,binding.dir);
+          await syncCommand('CAE_LIBRARY_JOB_RESTORE',{options:{accountId:binding.account,display:binding.display,tabId:binding.tabId,enabled:libraryDesired}});
+        }
+        if(pending.saved.export)await patchExportPreferences(pending.saved.export);
+        prefs=U.preferences({...prefs,monitorOnStart});
+        await chrome.storage.local.set({[U.KEY]:prefs,['cae.preferences.confirmed.'+binding.account]:true});
+        restored=null;
+        await refreshLibraryState(true);
+      }
       await refreshSync(true);
-    }finally{updateSyncApply();}
+      await persistPortable({chat:syncSaved(),library:{enabled:!!state.libraryJob?.enabled,monitorOnStart:prefs.monitorOnStart},export:exportPrefs}).catch(e=>log('WARNING: Could not save portable settings: '+e.message));
+    }finally{applyingRestored=false;updateSyncApply();}
   }
   $('exportAccessDiagnostics').addEventListener('click',async()=>{
     const button=$('exportAccessDiagnostics');button.disabled=true;
@@ -1236,7 +1292,7 @@
         exportedAt:new Date().toISOString(),surface:SURFACE,online:navigator.onLine!==false,
         workspaceVerified:!!state.scope?.observed&&!state.currentContextPending,bridgeConnected:!!state.port,
         vaultSelected:!!(state.directory||state.vaultCandidate),vaultBound:!!state.directory,
-        vaultPermission:state.vaultPermission,monitoringKnown:state.syncLoaded,
+        vaultPermission:state.vaultPermission,vaultErrorName:state.vaultErrorName||null,monitoringKnown:state.syncLoaded,
         monitoringEnabled:state.syncLoaded?!!state.sync?.enabled:null,connectionCode:state.lastConnectionCode,
         controllerCode:state.lastControllerCode,controllerCommand:state.lastControllerCommand,workerAvailable:false};
       try{local.workerReport=await syncCommand('CAE_VAULT_DIAGNOSTICS',{accountId:state.scope?.accountId});local.workerAvailable=true;}
@@ -1332,7 +1388,8 @@
     try{await syncCommand('CAE_LIBRARY_JOB_RESUME',{accountId:libraryAccount()});await refreshLibraryState(true);}catch(e){fail(e);}
   });
   $('libraryMonitor').addEventListener('change',async()=>{
-    try{await syncCommand('CAE_LIBRARY_JOB_MONITOR',{accountId:libraryAccount(),enabled:$('libraryMonitor').checked});await refreshLibraryState();}catch(e){fail(e);refreshLibraryControls();}
+    if(pendingRestore()){updateSyncApply();return;}
+    try{await syncCommand('CAE_LIBRARY_JOB_MONITOR',{accountId:libraryAccount(),enabled:$('libraryMonitor').checked});await refreshLibraryState();await persistPortable({library:{enabled:!!state.libraryJob?.enabled,monitorOnStart:prefs.monitorOnStart}});}catch(e){fail(e);refreshLibraryControls();}
   });
   $('libraryArchive').addEventListener('click',archiveLibrarySelection);
   $('libraryClear').addEventListener('click',()=>{state.librarySelected.clear();$('librarySelectAll').checked=false;renderLibrary();});
@@ -1402,7 +1459,7 @@
   $('openMonitor').addEventListener('click',()=>openPanel('monitor'));$('modeMonitor').addEventListener('click',()=>route('activity'));
   $('openStableSettings').addEventListener('click',()=>openOptions('settings'));
   for(const id of ['headerReconnect','toolsReconnectVault'])$(id).addEventListener('click',()=>grantVaultAccess().catch(fail));
-  for(const id of ['themeSelect','autoClosePanel','widgetEnabled','libraryMonitorOnStart'])$(id).addEventListener('change',()=>savePreferences().catch(fail));
+  for(const id of ['themeSelect','autoClosePanel','widgetEnabled','libraryMonitorOnStart'])$(id).addEventListener('change',()=>{if(id==='libraryMonitorOnStart'&&pendingRestore()){updateSyncApply();return;}savePreferences().then(()=>id==='libraryMonitorOnStart'?persistPortable({library:{enabled:!!state.libraryJob?.enabled,monitorOnStart:prefs.monitorOnStart}}):null).catch(fail);});
   for(const id of ['chatContainer','chatArchived'])$(id).addEventListener('change',renderChats);
   for(const id of ['libraryOrigin','libraryMedia','libraryArchiveFilter'])$(id).addEventListener('change',renderLibrary);
   $('keepPanelOpen').addEventListener('change',uiRefresh);

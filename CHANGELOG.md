@@ -1,3 +1,9 @@
+## v0.1.9 rev.7 — Portable settings and access recovery (test)
+
+- Restore saved workspace settings with explicit Apply restored settings; preserve browser-local permissions and jobs.
+- Independent cached diagnostics, bounded browser permission checks and partial widget status.
+- Required-action button states and popup Choose Vault opens side panel settings.
+
 ## v0.1.9 rev.6 — Cold Start & Existing Vault Recovery (test)
 
 - Distinguish trusted extension UI documents (including the options tab) from top-level ChatGPT content scripts; maintain the existing permission and host allowlists.

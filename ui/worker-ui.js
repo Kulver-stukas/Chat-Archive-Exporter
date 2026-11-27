@@ -58,27 +58,35 @@
       monitoringSummary:'Workspace verification temporarily unavailable. Retrying automatically.',
       connectionCode:['AUTH_REQUIRED','SESSION_TIMEOUT','NETWORK_ERROR','SESSION_INVALID_RESPONSE','WORKSPACE_UNVERIFIED','BRIDGE_UNAVAILABLE'].includes(e?.code)?e.code:'CONNECTION_UNAVAILABLE',reconnecting:true};}
     if(b.url!==sender.tab.url)return {verified:false,label:'Workspace changed',busy:false};
-    const [manual,library,sync]=await Promise.all([
+    const results=await Promise.allSettled([
       bounded('Manual job status',()=>root.ChatArchiveManualJobs.inspect()),
       bounded('Library status',()=>root.ChatArchiveLibraryJobs.inspect(b.accountId,false)),
       bounded('Monitoring status',()=>root.ChatArchiveSync.inspect(b.accountId))]);
+    const [manual,library,sync]=results.map(r=>r.status==='fulfilled'?r.value:null);
+    const known=results.map(r=>r.status==='fulfilled');
     const m=manual?.accountId===b.accountId?manual:null;
     const a=U.activity(m,library,sync);
     const task=U.running(m)?{kind:'Chat export',done:m.chatsDone||0,total:m.totalChats||0}:U.running(library?.job)?
       {kind:library.job.kind==='archive'?'File archive':'Library inventory',done:library.job.files_done||library.job.checked||0,total:library.job.total_files||library.job.total_details||0}:null;
     let vault='Not connected',vaultPermission='no_handle';
-    const dir=await bounded('Vault handle lookup',()=>root.ChatArchiveVault.restoreWorkspaceDirectory(b.accountId));
-    if(dir){
-      const p=await bounded('Vault permission check',()=>root.ChatArchiveVault.permissionState(dir));vaultPermission=p.state;
-      const bgGranted=sync?.enabled&&sync?.access?.worker==='granted'&&sync?.access?.offscreen==='granted';
-      vault=String(dir.name||'Vault')+(p.state==='granted'?' - Connected':bgGranted?' - Background connected (confirm here)':' - Confirmation required');
-    }
-    const manualSummary=m?`${U.humanStatus(m)} - ${safeLine(m.message||'')}. Chats: ${m.chatsDone||0}/${m.totalChats||0}, ${m.counts?.failed||0} failed.`:'No manual export recorded.';
-    const librarySummary=library?.job?`${U.humanStatus(library.job)}: ${safeLine(library.job.detail||'')}`:'No Library task recorded.';
-    const syncSummary=sync?.enabled?`${safeLine(sync.status||'idle')} · ${sync.trackedChats||0} archived chats · ${sync.queue||0} queued · ${sync.buffer?.pending||0} buffered · ${sync.buffer?.conflicts||0} conflicts`:'Off';
+    let vaultError=null;
+    try{
+      const dir=await bounded('Vault handle lookup',()=>root.ChatArchiveVault.restoreWorkspaceDirectory(b.accountId));
+      if(dir){
+        const p=await bounded('Vault permission check',()=>root.ChatArchiveVault.permissionState(dir));vaultPermission=p.state;
+        const bgGranted=sync?.enabled&&sync?.access?.worker==='granted'&&sync?.access?.offscreen==='granted';
+        const label={granted:'Connected',prompt:bgGranted?'Background connected (confirm here)':'Confirmation required',denied:'Access denied',error:'Permission check failed',unsupported:'Permission check unsupported'};
+        vault=String(dir.name||'Vault')+' - '+(label[p.state]||'Access unknown');
+        if(p.state==='error')vaultError=p.errorName||'PermissionError';
+      }
+    }catch(e){vault='Access status unavailable';vaultPermission='unknown';vaultError=e.code||'UNAVAILABLE';}
+    const warning=vaultError?'Vault access check: '+vaultError:!known.every(Boolean)?'One or more controller statuses unavailable.':'';
+    const manualSummary=!known[0]?'Unknown':m?`${U.humanStatus(m)} - ${safeLine(m.message||'')}. Chats: ${m.chatsDone||0}/${m.totalChats||0}, ${m.counts?.failed||0} failed.`:'No manual export recorded.';
+    const librarySummary=!known[1]?'Unknown':library?.job?`${U.humanStatus(library.job)}: ${safeLine(library.job.detail||'')}`:'No Library task recorded.';
+    const syncSummary=!known[2]?'Unknown':sync?.enabled?`${safeLine(sync.status||'idle')} · ${sync.trackedChats||0} archived chats · ${sync.queue||0} queued · ${sync.buffer?.pending||0} buffered · ${sync.buffer?.conflicts||0} conflicts`:'Off';
     return {verified:true,scope_stale:false,canExport:/\/c\/[0-9a-f-]{36}/i.test(sender.tab.url||''),
-      workspace:b.display,label:a.label,icon:a.icon,busy:a.busy,monitoring:a.monitoring,vault,vaultPermission,task,
-      monitoringSummary:a.monitoring?'Monitoring enabled; waiting for changes':'Monitoring disabled',
+      workspace:b.display,label:a.busy?a.label:warning?'Needs attention':a.label,icon:a.icon,busy:a.busy,monitoring:known[1]&&known[2]?a.monitoring:null,vault,vaultPermission,task,warning,
+      monitoringSummary:!known[1]||!known[2]?'Monitoring status partially unavailable':a.monitoring?'Monitoring enabled; waiting for changes':'Monitoring disabled',
       manualSummary,librarySummary,syncSummary,
       syncVault:sync?.vaultName||'',syncSince:sync?.since||null,syncMessage:safeLine(sync?.message||''),
       logs:{manual:formatLogs(m?.logs,12),inventory:formatLogs(library?.events,12),monitoring:formatLogs(sync?.logs,16)}};
