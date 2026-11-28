@@ -52,6 +52,7 @@ const run=async function fixture(S,I,M,P,SP){
  ok(get(plan,'c3').target.includes('/_GPTs/Named_Tutor_87654321/'),'GPT from fallback moved');
  ok(get(plan,'c4').target.includes('/_Unassigned/'),'explicit observed removal from project');
  ok(get(plan,'source').target.endsWith('/Sources/source file.zip'),'source original filename');
+ ok(get(plan,'source').claims[0].canonical_resource_id==='source:'+P1+':file_abc','canonical source identity');
  ok(get(plan,'meta').canonical_metadata_id==='project:'+P1+':project-metadata','canonical metadata identity');
  ok(get(plan,'inventory').canonical_metadata_id==='library:inventory','canonical library metadata identity');
  ok(get(plan,'control').action==='convert_control'&&get(plan,'control').target.endsWith('/.cae/chats.json'),'control conversion');
