@@ -1,5 +1,6 @@
 importScripts('contracts/provider.js','providers/chatgpt/descriptor.js','providers/registry.js');
-importScripts('lib/export-selection.js','lib/export-preferences.js','lib/markdown-primitives.js','providers/chatgpt/markdown-profile.js','lib/markdown.js','lib/normalize.js','providers/chatgpt/config-inventory.js','lib/hash.js','lib/paths.js','lib/meta.js','lib/sources.js',
+importScripts('contracts/resources.js','providers/chatgpt/storage-profile.js','providers/chatgpt/job-profile.js','providers/chatgpt/background-inventory.js','providers/chatgpt/library-scan.js','lib/job-transport.js');
+importScripts('lib/export-selection.js','lib/export-preferences.js','lib/markdown-primitives.js','providers/chatgpt/markdown-profile.js','lib/markdown.js','lib/normalize.js','providers/chatgpt/config-inventory.js','lib/hash.js','lib/paths.js','providers/chatgpt/project-metadata.js','lib/sources.js',
   'lib/vault.js','lib/workspace-activity.js','lib/vault-transfer.js','lib/sync-policy.js','lib/sync-spool.js','lib/sync-rpc.js','lib/vault-context.js','lib/vault-diagnostics.js','lib/sync.js','lib/tab-bootstrap.js','lib/manual-store.js','lib/manual-attachments.js','lib/manual-jobs.js',
   'providers/chatgpt/library-inventory.js','lib/library-policy.js','lib/library-store.js','lib/library-vault.js','lib/library-jobs.js');
 

@@ -11,7 +11,7 @@ def run_scenario(browser,with_cache):
     html=re.sub(r'<script\b[^>]*>.*?</script>|<link\b[^>]*>','',(root/'panel.html').read_text(),flags=re.S)
     page.set_content(html);page.add_style_tag(content=(root/'styles.css').read_text())
     page.add_script_tag(content=(root/'tests/ui-fixtures.js').read_text())
-    for f in ['lib/export-selection.js','lib/markdown-primitives.js','providers/chatgpt/markdown-profile.js','lib/markdown.js','lib/normalize.js','lib/paths.js','lib/sort.js','ui/state.js','ui/tree.js','ui/chat-list-cache.js']:
+    for f in ['lib/export-selection.js','lib/markdown-primitives.js','providers/chatgpt/markdown-profile.js','lib/markdown.js','lib/normalize.js','contracts/resources.js','providers/chatgpt/storage-profile.js','lib/paths.js','lib/sort.js','ui/state.js','ui/tree.js','ui/chat-list-cache.js']:
         page.add_script_tag(content=(root/f).read_text())
     page.evaluate('''(withCache) => {
       const t=__ui;

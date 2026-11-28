@@ -57,6 +57,12 @@ const send=(m,sender)=>new Promise(resolve=>{const ret=chrome.runtime.onMessage.
  const stored=(await send({type:'CAE_UI_CHAT_CACHE',accountId:'workspace',display:'Workspace'},ui)).result;
  assert.equal(stored.items[0].title,'Stored in Vault');assert.equal(stored.source,'Vault mirror');
  assert.equal(await send({type:'CAE_UI_CHAT_CACHE',accountId:'workspace',display:'Workspace'},sender),null,'page cannot access arbitrary workspace cache');
+ const V=ctx.ChatArchiveVault,dir={name:'Test Vault',isSameEntry:async d=>d===dir};
+ V.restoreWorkspaceDirectory=async()=>dir;V.permissionState=async()=>({state:'granted'});V.resolveWorkspacePrefix=async()=> 'ChatGPT/Workspace';V.workspaceIndexPath=p=>p+'/.workspace.json';V.deadline=async p=>p;
+ const id='aaaaaaaa-1111-2222-3333-444444444444';V.readJson=async()=>({schema:'cae.workspace-chats.v1',account_id:'workspace',chats:{[id]:{conversation_id:id,path:'ChatGPT/Workspace/stored.md',title:'Disk saved',updated_ms:Date.parse('2026-11-18T12:00:00Z'),sha256:'a'.repeat(64),bytes:128}}});
+ const disk=(await send({type:'CAE_UI_CHAT_CACHE',accountId:'workspace',display:'Workspace'},ui)).result;assert.equal(disk.source,'Vault workspace index');assert.equal(disk.vault.records[id].title,'Disk saved');
+ dir.isSameEntry=async()=>false;const changed=(await send({type:'CAE_UI_CHAT_CACHE',accountId:'workspace',display:'Workspace'},ui)).result;assert.equal(changed.vault,null,'changed binding cannot attest current archive');
+ V.restoreWorkspaceDirectory=async()=>null;
  await send({type:'CAE_UI_OPEN_PANEL',mode:'library'},sender);assert.deepEqual(opens,['intent','open']);
  await send({type:'CAE_UI_OPEN_PANEL',mode:'settings'},sender);assert.equal(lastIntent['cae.ui.intent.1'].mode,'settings');assert.deepEqual(opens,['intent','open','intent','open']);
  await send({type:'CAE_UI_TOGGLE_WIDGET',tabId:11},ui);assert(widgetMessages.includes('CAE_UI_WIDGET_TOGGLE'));

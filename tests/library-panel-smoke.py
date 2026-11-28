@@ -31,7 +31,7 @@ with sync_playwright() as p:
  for src in ['tests/ui-fixtures.js']:
   page.add_script_tag(content=(root/src).read_text())
  page.add_script_tag(content=modify_mock)
- for f in ['contracts/provider.js','providers/chatgpt/descriptor.js','providers/registry.js','lib/export-selection.js','lib/markdown-primitives.js','providers/chatgpt/markdown-profile.js','lib/markdown.js','lib/normalize.js','lib/paths.js','lib/sort.js','ui/state.js','ui/tree.js','ui/chat-list-cache.js','panel.js']:
+ for f in ['contracts/provider.js','providers/chatgpt/descriptor.js','providers/registry.js','lib/export-selection.js','lib/markdown-primitives.js','providers/chatgpt/markdown-profile.js','lib/markdown.js','lib/normalize.js','contracts/resources.js','providers/chatgpt/storage-profile.js','lib/paths.js','lib/sort.js','ui/state.js','ui/tree.js','ui/chat-list-cache.js','panel.js']:
   page.add_script_tag(content=(root/f).read_text())
  page.wait_for_function("document.querySelector('#scope').textContent.includes('Test workspace')")
  page.locator('#modeLibrary').click()

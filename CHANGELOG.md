@@ -1,3 +1,9 @@
+## v0.2.0 rev.4 (0.2.0.6) — architecture preview
+
+- Extract provider-specific job planning and inventory phases, semantic transport and legacy storage profile. Add logical resource identities; retain conservative shared-index guard and all existing schemas.
+- Fix Chats archive status and filters using current indexed Vault revision (#9).
+- Defer migration and physical index/lock split (#7), ATT/STOP UI states (#10). v0.1 line frozen.
+
 ## v0.2.0 rev.3 hotfix 2 (manifest 0.2.0.5) — Shared Workspace state
 
 - Load an existing Library inventory from the verified Workspace Vault before any provider refresh. Adoption is read-only on disk and independent of monitoring preferences. Open Files triggers at most one lightweight metadata check when the saved inventory is older than five minutes and no local job is active; initial inventory remains explicit.

@@ -1,0 +1,17 @@
+'use strict';
+const assert=require('node:assert/strict'),C=require('../ui/chat-list-cache.js');
+const account='workspace_a',prefix='ChatGPT/Test',ids=['manual-0001','background-0002','old-copy-0003','provider-archive-0004','bad-record-0005'];
+const updated='2026-11-27T10:00:00Z',ms=Date.parse(updated);
+const items=ids.map((id,i)=>({id,title:'Chat '+i,projectId:'',updated,archived:i===3}));
+const row=(i,stamp=ms)=>({conversation_id:ids[i],path:prefix+'/'+ids[i]+'.md',title:items[i].title,project_id:'',archived:false,updated_ms:stamp,listed_updated_ms:stamp,sha256:'a'.repeat(64),bytes:180});
+const ledger={schema:'cae.workspace-chats.v1',account_id:account,chats:{[ids[0]]:row(0),[ids[1]]:row(1),[ids[2]]:row(2,ms-1000),[ids[4]]:{...row(4),path:prefix+'/../Wrong/x.md'}}};
+const result=C.fromIndex(ledger,null,account,prefix),e=result.vault;
+assert.deepEqual(items.map(i=>C.archiveStatus(i,e,account)),['current','current','outdated','missing','unknown']);
+assert.equal(C.archiveStatus(items[0],e,account,false),'saved','disk-only preview cannot establish current provider revision');
+assert.equal(C.archiveStatus({...items[0],updated:null},e,account),'unknown');
+assert.equal(C.archiveStatus({...items[0],title:'Changed'},e,account),'outdated');
+assert.equal(C.archiveStatus(items[0],e,'workspace_b'),'unknown');
+assert.equal(C.fromIndex(null,{schema:'cae.background-mirror.v1',account,prefix,chats:ledger.chats},account,prefix).vault,null);
+assert.equal(C.vaultEvidence(ledger,'workspace_b',prefix),null);
+assert.equal(C.vaultEvidence(ledger,account,'ChatGPT/.chat-archive'),null);
+console.log('PASS: manual/background current revisions, outdated, remote archived only, unknown and account isolation');

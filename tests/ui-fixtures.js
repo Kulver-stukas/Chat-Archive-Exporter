@@ -31,6 +31,7 @@
     if(m.type==='CAE_EXPORT_PREFS_PATCH')await chrome.storage.local.set({[key]:value});
     return {ok:true,result:structuredClone(value)};
    }
+   if(m.type==='CAE_UI_CHAT_CACHE')return {ok:true,result:structuredClone(t.chatVault||null)};
    if(m.type==='CAE_MANUAL_STATUS')return {ok:true,result:structuredClone(t.manual)};
    if(m.type==='CAE_MANUAL_SUBMIT'){
     if(t.reject)return {ok:false,error:'Fixture: job rejected before acceptance'};

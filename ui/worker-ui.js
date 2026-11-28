@@ -124,10 +124,12 @@
     try{
       const dir=await root.ChatArchiveVault.restoreWorkspaceDirectory(accountId);
       if(dir&&(await root.ChatArchiveVault.permissionState(dir))?.state==='granted'){
-        if(!cfg?.prefix)prefix=await root.ChatArchiveVault.resolveWorkspacePrefix(dir,prefix,accountId);
+        prefix=await root.ChatArchiveVault.resolveWorkspacePrefix(dir,prefix,accountId);
         ledger=await root.ChatArchiveVault.readJson(dir,root.ChatArchiveVault.workspaceIndexPath(prefix));
+        const bound=await root.ChatArchiveVault.restoreWorkspaceDirectory(accountId);
+        if(!bound||typeof dir.isSameEntry!=='function'||!await root.ChatArchiveVault.deadline(dir.isSameEntry(bound),3000,'Chat index binding verification'))ledger=null;
       }
-    }catch(_e){}
+    }catch(_e){ledger=null;}
     try{mirror=await root.ChatArchiveSyncSpool.readMirror(accountId,prefix);}catch(_e){}
     return C.fromIndex(ledger,mirror,accountId,prefix);
   }

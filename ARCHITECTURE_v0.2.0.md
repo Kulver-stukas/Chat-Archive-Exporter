@@ -79,3 +79,25 @@ Hotfix parity: the original Beta 2 fixture remains unchanged. Its two checked sy
 `lib/library-jobs.hydrate` loads the existing account-validated `_Library/_inventory.json` into profile-local display/cache state using a passive snapshot read, not a writer claim. An explicit Files view may subsequently schedule a one-shot incremental metadata check when due. No automatic first inventory, original-file retrieval, or monitor enrollment.
 
 `lib/workspace-activity.js` is a limited presentation receipt layer. `.activity-manual.json` and `.activity-library.json` are account/provider-bound, last-result summaries, published under the existing global writer guard with a reread/compare at commit. They are not job journals or executable checkpoints. Local active jobs remain authoritative. Rev.4 must move these resources into the scoped coordination model (issue #7).
+
+## Rev.4: Job, transport and storage boundaries (manifest 0.2.0.6)
+
+The source baseline is rev.3 hotfix 2 (0.2.0.5). The v0.1 line is frozen; future corrections are on v0.2. See TODO_v0.2.md for remaining tasks and sequencing.
+
+| Module | Responsibility |
+|---|---|
+| `contracts/resources.js` | Pure provider/workspace/resource tuple, overlap predicate and fail-closed handling of unknown resource sets. No browser or provider dependencies. |
+| `lib/job-transport.js` | Injectable verified-tab selection and semantic operation transport; provider-specific wire names and verification supplied by a profile. |
+| `providers/chatgpt/job-profile.js` | Legacy RPC mapping, manual list-item normalization, layout, context planning and chat projection. |
+| `providers/chatgpt/background-inventory.js` | Provider-specific conversation/project/configuration inventory, enrichment and projection; common controller supplies storage and queue callbacks. |
+| `providers/chatgpt/library-scan.js` | ChatGPT-specific graph traversal, image/reference discovery, detail and catalog assembly phases. |
+| `providers/chatgpt/project-metadata.js` | Existing project metadata normalization and rendering; `lib/meta.js` retained as a compatibility facade for tests. |
+| `providers/chatgpt/storage-profile.js` | Existing directory taxonomy, paths, index schema identifiers, revision comparison and conservative logical write resource sets. |
+| `lib/manual-jobs.js`, `lib/sync.js`, `lib/library-jobs.js` | Existing durable job state, scheduling, checkpoints, retries, spool, commit and cancellation; invoke the new adapters. Some legacy-shaped payload and source/attachment handling remains. |
+| `ui/chat-list-cache.js` | View-only metadata projection of archive state; separate provider archive flag from the current indexed local revision (issue #9). |
+
+All active ChatGPT writes still claim the shared legacy provider index plus the workspace resource. The existing conservative writer guard remains in force; the new resource overlap predicate is a contract for later scoped coordination, not an activated disjoint-resource locking implementation. Existing archive readers, indexes, schema versions and file paths remain unchanged. No migration runs on upgrade. The physical split of source/metadata indexes, rebuildable global index, resource-granular acquisition and shortening of network/disk transactions are deferred until their dependencies and migration are explicitly addressed (#7). No claim of fully provider-neutral controllers or concurrent writes to disjoint workspaces is made.
+
+The Chats view compares the account-validated workspace ledger against the latest available conversation metadata using the existing revision comparator. `archived` denotes a current indexed Vault copy; an older copy displays `update pending`; a provider-only archived conversation is annotated `ChatGPT archive`. Missing/outdated copies appear under Not archived; uncertain status remains in All chats. The disk-only preview says `saved`, not current. This is a metadata classification, not a live rehash/existence audit of every file. Neither the background mirror alone nor a stale binding attests a current Vault copy. No chat-body fetch, export, permission request or index write is initiated by the view.
+
+Rev.5: continue UI separation, capability mapping and status badge backlog (#10). The ATT/STOP indicators are specified, not implemented. The original Beta 2 parity fixture remains unchanged; rev.4 additionally checks the exact rev.3 hotfix 2 runtime baseline and a transport with a test-only non-ChatGPT profile.

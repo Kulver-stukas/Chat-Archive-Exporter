@@ -17,6 +17,8 @@ try:
     def page():
         pg=ctx.new_page();pg.goto(url)
         pg.evaluate('''()=>{window.chrome={storage:{local:{get:async k=>({[k]:JSON.parse(localStorage.getItem(k)||'null')}),set:async o=>{for(const[k,v] of Object.entries(o))localStorage.setItem(k,JSON.stringify(v));}}},runtime:{getManifest:()=>({version:'0.2.0.4'})}};}''')
+        pg.add_script_tag(content=(root/'contracts/resources.js').read_text())
+        pg.add_script_tag(content=(root/'providers/chatgpt/storage-profile.js').read_text())
         pg.add_script_tag(content=(root/'lib/vault.js').read_text())
         return pg
     a=page();one=a.evaluate('''async()=>{const V=ChatArchiveVault,d=await navigator.storage.getDirectory();window.writer=await V.acquireLock();window.release=await V.acquireVaultGuard(d,writer,{operation:'manual_export',workspaceId:'test-account'});return (await V.inspectWriterClaims(d))[0].name;}''')

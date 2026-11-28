@@ -13,7 +13,7 @@ with sync_playwright() as p:
  page.add_script_tag(content=(root/'tests/ui-fixtures.js').read_text())
  page.evaluate('''()=>{__ui.savedLib={...__ui.lib,job:null};__ui.lib=null;__ui.sharedActivity={account_id:__ui.scope.accountId,manual:{finished_at:'2026-11-27T20:00:00Z',summary:'Complete - Browser download completed in originating browser; chats: 1/1, 0 failed. (saved history)'},library:{finished_at:'2026-11-27T20:01:00Z',summary:'Complete - Library archival: 55 saved, 0 failed. (saved history)'}};
  const send=chrome.runtime.sendMessage;chrome.runtime.sendMessage=async m=>{if(m.type==='CAE_LIBRARY_JOB_REFRESH_ONCE'){window.catalogVisibleAtRefresh=document.querySelector('#libraryGroups').textContent.includes('Generated illustration');}return send(m);};}''')
- for f in ['contracts/provider.js','providers/chatgpt/descriptor.js','providers/registry.js','lib/export-selection.js','lib/markdown-primitives.js','providers/chatgpt/markdown-profile.js','lib/markdown.js','lib/normalize.js','lib/paths.js','lib/sort.js','ui/state.js','ui/tree.js','ui/chat-list-cache.js','panel.js']:page.add_script_tag(content=(root/f).read_text())
+ for f in ['contracts/provider.js','providers/chatgpt/descriptor.js','providers/registry.js','lib/export-selection.js','lib/markdown-primitives.js','providers/chatgpt/markdown-profile.js','lib/markdown.js','lib/normalize.js','contracts/resources.js','providers/chatgpt/storage-profile.js','lib/paths.js','lib/sort.js','ui/state.js','ui/tree.js','ui/chat-list-cache.js','panel.js']:page.add_script_tag(content=(root/f).read_text())
  page.wait_for_function("document.querySelector('#scope').textContent.includes('Test workspace')")
  page.locator('#modeLibrary').click()
  page.wait_for_function("window.catalogVisibleAtRefresh===true")

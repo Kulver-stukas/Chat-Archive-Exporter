@@ -1,0 +1,24 @@
+'use strict';
+const assert=require('node:assert/strict');
+const R=require('../contracts/resources.js'),P=require('../providers/chatgpt/storage-profile.js'),T=require('../lib/job-transport.js');
+const key=(p,w,k='index',i='chats')=>R.key(p,w,k,i);
+assert.equal(R.overlaps(key('chatgpt','A'),key('chatgpt','A')),true);
+assert.equal(R.overlaps(key('chatgpt','A'),key('chatgpt','B')),false);
+assert.equal(R.overlaps(key('chatgpt','A'),key('claude','A')),false);
+assert.equal(R.overlaps(key('chatgpt','A','workspace_tree','archive'),key('chatgpt','A','file','note')),true);
+assert.equal(R.overlaps(key('chatgpt',null,'provider_tree','archive'),key('chatgpt','B')),true);
+assert.equal(R.conflicts([], [key('chatgpt','A')]),true);
+assert.equal(R.conflicts(['invalid'],[key('claude','B')]),true);
+assert.equal(R.conflicts(P.resourceKeys('workspace-A','library'),P.resourceKeys('workspace-B','manual_export')),true,'shared legacy index remains a conflict');
+assert.equal(R.conflicts(P.resourceKeys('workspace-A','library'),[key('claude','workspace-A')]),false,'logical identity is provider scoped');
+assert.equal(P.resourcePath('ChatGPT/Test','library'),'ChatGPT/Test/_Library/_inventory.json');
+assert.equal(P.indexPath,'ChatGPT/.chat-archive/index.json');
+(async()=>{
+ const calls=[],closed=[];
+ const fake={descriptor:{displayName:'Fixture'},wire:{status:'WHO',read:'FETCH'},matches:u=>u.startsWith('fixture:'),verified:(s,w)=>s.workspace===w};
+ const transport=T.create(fake,{get:async()=>({id:1,url:'fixture:wrong'}),query:async()=>[{id:2,url:'fixture:right'},{id:3,url:'other:'}],ensure:async()=>{},connect:(id)=>({call:async(op,arg)=>{calls.push([id,op,arg]);return op==='WHO'?{workspace:id===1?'wrong':'good'}:{value:42};},close:()=>closed.push(id)})});
+ const result=await transport.findVerified({tabId:1,accountId:'good',timeout:42});
+ assert.equal(result.tabId,2);assert.deepEqual(closed,[1]);assert.deepEqual(await result.rpc.call('read',{id:7}),{value:42});assert.throws(()=>result.rpc.call('unknown'),/Unknown job operation/);result.rpc.close();
+ assert.deepEqual(calls,[[1,'WHO',{force:true}],[2,'WHO',{force:true}],[2,'FETCH',{id:7}]]);
+ console.log('PASS: provider/workspace/resource identity, overlap contract, legacy global conflict, injected non-ChatGPT transport');
+})().catch(e=>{console.error(e);process.exitCode=1;});

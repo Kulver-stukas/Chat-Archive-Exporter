@@ -5,7 +5,7 @@
     port: null, tab: null, scope: null, mode: 'current', directory: null, currentContextPending:false,
     chats: [], projects: [], selected: new Set(), selectedProjects:new Set(), collapsed: new Set(), requests: new Map(), nextId: 1,
     busy: false, cancel: false, warnings: [], sync: null, syncLoaded: false, syncAccountId: null,
-    lastVerifiedWorkspace: null,
+    lastVerifiedWorkspace: null, chatVaultEvidence:null, chatVaultRead:null, chatVaultAt:0, chatVaultAttempt:null,
     connecting: null, listLoading: null, listAccountId: null, listLoadedAt: 0, listCacheLoading: null, listSource: null, listLoadAccount: null,
     nextAutoAttempt: 0, autoFailures: 0, reconnectTimer: null,
     vaultPermission: 'unknown', vaultCandidate:null, lastConnectionCode:null, lastControllerCode:null, lastControllerCommand:null,
@@ -599,7 +599,7 @@
     }
     const previousAccount=state.lastVerifiedWorkspace?.accountId;
     if(previousAccount&&previousAccount!==scope.accountId){state.selected.clear();state.selectedProjects.clear();state.chats=[];state.projects=[];state.listAccountId=null;state.listLoadedAt=0;state.listSource=null;state.sync=null;state.syncLoaded=false;state.librarySelected.clear();}
-    state.scope = scope;state.directory=null;state.sharedActivity=null;state.libraryLoadError=null;state.lastConnectionCode=null;
+    state.scope = scope;state.directory=null;state.chatVaultEvidence=null;state.chatVaultAt=0;state.sharedActivity=null;state.libraryLoadError=null;state.lastConnectionCode=null;
     chrome.runtime.sendMessage({type:'CAE_UI_BIND',tabId:tab.id,accountId:scope.accountId,display:scope.display,observed:scope.observed}).catch(()=>{});
     if(state.mode==='library')renderLibrary();
     rememberVerifiedWorkspace(scope,tab);
@@ -663,9 +663,14 @@
   }
 
   function chatKind(c){return ChatArchivePaths.isProject(c.projectId)?'project':ChatArchivePaths.isGPT(c.gptId||c.projectId)?'gpt':'unassigned';}
+  function chatArchiveStatus(c){
+    const e=state.chatVaultEvidence;
+    if(!e||e.dir!==state.directory||state.currentContextPending||e.context!==contextGeneration)return 'unknown';
+    return CAEUIChatListCache.archiveStatus(c,e.value,state.scope?.accountId,state.listSource==='live_api'||state.listSource==='last ChatGPT list');
+  }
   function filteredChats(){
     const query=$('search').value.toLocaleLowerCase().trim(),container=$('chatContainer').value,archived=$('chatArchived').value;
-    return state.chats.filter(c=>(container==='all'||chatKind(c)===container)&&(archived==='all'||!!c.archived===(archived==='archived'))&&
+    return state.chats.filter(c=>(container==='all'||chatKind(c)===container)&&(archived==='all'||(archived==='archived'?chatArchiveStatus(c)==='current':['missing','outdated'].includes(chatArchiveStatus(c))))&&
       (!query||`${c.title} ${c.project||''} ${c.gptName||''}`.toLocaleLowerCase().includes(query)));
   }
   function refreshSelectionUi(){
@@ -675,6 +680,9 @@
   }
   function renderChats(){
     const all=new Map(),visibleIds=new Set(filteredChats().map(c=>c.id));
+    const unknown=state.chats.filter(c=>['unknown','saved'].includes(chatArchiveStatus(c))).length;
+    $('chatArchiveHint').textContent=unknown?`${unknown} chat(s) without confirmed Vault currency. Unknown rows are shown in All chats only. Currency is compared with the latest available conversation list.`:'Archived = indexed current Vault revision; older copies need an update.';
+    $('chatArchiveHint').classList.toggle('hidden',!state.chats.length);
     for(const c of state.chats){
       const kind=chatKind(c),id=kind==='project'?ChatArchivePaths.canonical(c.projectId):kind==='gpt'?ChatArchivePaths.gptId(c.gptId||c.projectId):'unassigned';
       const key=kind+':'+id;
@@ -693,7 +701,10 @@
       groups.push({id:key,name:g.name,selectableIds:g.emptyProjectId?['project:'+g.emptyProjectId]:g.entries.map(c=>c.id),
         hint:g.emptyProjectId?'No conversations. Selection exports this Project configuration and Sources.':null,
         countText:visible.length===g.entries.length?String(visible.length):`${visible.length}/${g.entries.length}`,
-        items:visible.map(c=>({id:c.id,title:c.title,note:c.updated?'Updated '+new Date(typeof c.updated==='number'?c.updated*1000:c.updated).toLocaleDateString():'',badge:c.archived?'archived':''}))});
+        items:visible.map(c=>{const a=chatArchiveStatus(c);return {id:c.id,title:c.title,
+          note:[c.updated?'Updated '+new Date(typeof c.updated==='number'?c.updated*1000:c.updated).toLocaleDateString():'',c.archived?'ChatGPT archive':''].filter(Boolean).join(' · '),
+          archived:a==='current',badge:a==='current'?'archived':a==='outdated'?'update pending':a==='saved'?'saved':'',
+          reason:a==='current'?'Current revision in the saved Vault index; not a live file-integrity audit.':a==='outdated'?'Saved revision differs from the last conversation list.':undefined};})});
     }
     CAEUITree.render($('groupList'),{groups,selected,collapsed:state.collapsed,onToggle:id=>{state.collapsed.has(id)?state.collapsed.delete(id):state.collapsed.add(id);renderChats();},
       onSelect:(ids,on)=>{for(const id of ids){if(id.startsWith('project:')){on?state.selectedProjects.add(id.slice(8)):state.selectedProjects.delete(id.slice(8));}else{on?state.selected.add(id):state.selected.delete(id);}}renderChats();}});
@@ -707,23 +718,39 @@
     $('listSummary').textContent=`${data.items.length} saved chats (${state.listSource}); checking ChatGPT for updates…`;
     renderChats();return true;
   }
+  async function refreshChatVault(force=false){
+    const account=state.scope?.accountId,dir=state.directory,context=contextGeneration;
+    if(!account||!dir||state.currentContextPending||!providers.verified(state.scope)){
+      state.chatVaultEvidence=null;state.chatVaultAt=0;return null;
+    }
+    if(state.chatVaultRead?.context===context&&state.chatVaultRead.dir===dir&&state.chatVaultRead.account===account)return state.chatVaultRead.promise;
+    if(!force&&state.chatVaultAttempt?.dir===dir&&state.chatVaultAttempt.context===context&&Date.now()-state.chatVaultAt<5000)return null;
+    const valid=()=>state.scope?.accountId===account&&state.directory===dir&&contextGeneration===context&&!state.currentContextPending;
+    const read={account,dir,context,promise:null};
+    state.chatVaultAttempt={dir,context};state.chatVaultAt=Date.now();
+    read.promise=(async()=>{
+      try{
+        const v=await syncCommand('CAE_UI_CHAT_CACHE',{accountId:account,display:state.scope?.display||''});
+        if(!valid())return null;
+        state.chatVaultEvidence=v?.vault?.account_id===account?{dir,context,value:v.vault}:null;
+        state.chatVaultAt=Date.now();
+        if(v?.items?.length&&showCachedChatList(v,account,v.source||'Vault')){
+          const C=globalThis.CAEUIChatListCache;
+          chrome.storage.local.set({[C.key(account)]:C.envelope(account,v.source,v.items,v.projects)}).catch(()=>{});
+        }else if(state.listAccountId===account&&state.chats.length)renderChats();
+        return v;
+      }catch(e){if(valid()){state.chatVaultEvidence=null;if(state.chats.length)renderChats();log('WARNING: Vault chat index unavailable: '+e.message);}return null;}
+      finally{if(state.chatVaultRead===read)state.chatVaultRead=null;}
+    })();state.chatVaultRead=read;return read.promise;
+  }
   async function hydrateCachedChats(account){
     const C=globalThis.CAEUIChatListCache;
-    if(!C||!account||state.scope?.accountId!==account||state.listLoadedAt>0)return;
-    try{
+    if(!C||!account||state.scope?.accountId!==account)return;
+    if(!state.listLoadedAt)try{
       const key=C.key(account),saved=C.accept((await chrome.storage.local.get(key))[key],account);
       if(saved?.items?.length)showCachedChatList(saved,account,saved.source==='live_api'?'last ChatGPT list':saved.source);
     }catch(e){log('WARNING: Last chat-list cache unavailable: '+e.message);}
-    // The Vault index/mirror is read-only. It is useful on the very first
-    // panel opening, before any UI list cache exists for this workspace.
-    if(state.listAccountId===account&&state.chats.length)return;
-    try{
-      const v=await syncCommand('CAE_UI_CHAT_CACHE',{accountId:account,display:state.scope?.display||''});
-      if(v?.items?.length&&showCachedChatList(v,account,v.source||'Vault')){
-        const value=C.envelope(account,v.source,v.items,v.projects);
-        chrome.storage.local.set({[C.key(account)]:value}).catch(()=>{});
-      }
-    }catch(e){log('WARNING: Vault chat index unavailable: '+e.message);}
+    await refreshChatVault(true);
   }
   async function loadList() {
     // Refresh is independent of export jobs: the saved list stays interactive
@@ -773,7 +800,7 @@
     const account=state.scope.accountId;
     if(state.listLoading&&state.listLoadAccount===account)return state.listLoading;
     if(!force&&state.listAccountId===account&&state.listLoadedAt&&Date.now()-state.listLoadedAt<LIST_MAX_AGE_MS)
-      return Promise.resolve();
+      return refreshChatVault(true);
     // Start both at once: the cache renders as soon as available, rather
     // than waiting for all pages of the provider's listing API.
     const task=Promise.allSettled([hydrateCachedChats(account),loadList()]);
@@ -1006,6 +1033,7 @@
     })().finally(()=>{
       if(vaultStatusRun===operation)vaultStatusRun=null;
       uiRefresh();
+      if(state.mode==='all'&&uiView==='export'&&state.chats.length){renderChats();if(!state.currentContextPending)refreshChatVault().catch(()=>{});}
       if(dir!==state.directory||account!==state.scope?.accountId)refreshVaultStatus().catch(()=>{});
     });
     vaultStatusRun=operation;return operation;
@@ -1460,7 +1488,7 @@
   for(const id of ['syncEnabled','syncScope','syncEnrollment','syncSources'])
     $(id).addEventListener('change',updateSyncApply);
   chrome.storage.onChanged.addListener((changes,area)=>{
-    if(area==='local'&&changes['cae.background.v1'])refreshSync().catch(()=>{});
+    if(area==='local'&&changes['cae.background.v1']){refreshSync().catch(()=>{});if(state.mode==='all'&&uiView==='export')refreshChatVault().catch(()=>{});}
   });
   // Permission revalidation is passive and never opens a dialog on tab focus.
   document.addEventListener('visibilitychange',()=>{
@@ -1477,6 +1505,7 @@
     if(document.visibilityState!=='visible'||state.currentContextPending||!providers.verified(state.scope)||state.vaultPermission!=='granted')return;
     refreshSharedActivity().catch(()=>{});
     if(uiView==='export'&&state.mode==='library')refreshLibraryState(true,false).catch(()=>{});
+    if(uiView==='export'&&state.mode==='all')refreshChatVault(true).catch(()=>{});
   },30000);
   window.addEventListener('online',()=>{state.autoFailures=0;state.nextAutoAttempt=0;scheduleReconnect(300,true);ensureExportPreferences().catch(()=>{});});
   chrome.tabs.onActivated?.addListener(info=>{
@@ -1586,7 +1615,7 @@
     try{showManual(await syncCommand('CAE_MANUAL_RETRY',{jobId:manualJob.id}));}catch(e){fail(e);}
   });
   chrome.storage.onChanged.addListener((changes,area)=>{
-    if(area==='local'&&changes['cae.manual-status.v1']){refreshManual().catch(()=>{});refreshSharedActivity(true).catch(()=>{});}
+    if(area==='local'&&changes['cae.manual-status.v1']){refreshManual().catch(()=>{});refreshSharedActivity(true).catch(()=>{});if(state.mode==='all'&&uiView==='export')refreshChatVault().catch(()=>{});}
   });
   refreshManual().catch(e=>log('Manual export controller unavailable: '+e.message));
   setPanelModeFromSession().catch(()=>{});
