@@ -25,20 +25,26 @@ const create=function schemaFactory(){
   const unknownDisplay=(value,id)=>!value||/^Workspace(?:[ _][a-z0-9-]+)?$/i.test(value)&&
     (String(value).length<=10||id.toLowerCase().includes(String(value).split(/[ _]/).at(-1).toLowerCase()))||
     /^(?:Current workspace|ChatGPT workspace)$/i.test(value);
-  function workspace({id,display,identity}){
+  function workspace({id,display,identity,occupied=[]}){
     if(!idOK(id))throw Error('Invalid workspace identity.');
     const i=identity?.account_id===id?identity:{};
     const displayName=!unknownDisplay(display,id)?String(display):null;
     // Scope type is not a paid plan. Use Business only if an explicit plan is
     // actually exposed by a verified identity snapshot; do not infer from UI.
-    const type={business:'Business',team:'Business',enterprise:'Enterprise',edu:'Edu',plus:'Plus',pro:'Pro',free:'Free',go:'Go'}[String(i.plan_type||'').toLowerCase()]||
+    const plans={business:'Business',team:'Business',enterprise:'Enterprise',edu:'Edu',plus:'Plus',pro:'Pro',free:'Free',go:'Go'};
+    const plan=String(i.plan_type||'').toLowerCase();
+    const type=(Object.hasOwn(plans,plan)?plans[plan]:null)||
       (i.scope_type==='personal'?'Personal':i.scope_type==='workspace'?'Workspace':'Unknown');
     const human=i.workspace_name||i.user_name||i.display_name||displayName||null;
     const name=human?cleanLabel(human):'Unnamed';
     const token=idToken('workspace',id);
+    const occupiedNames=new Set(occupied.map(fold));let length=Math.min(8,token.length);
+    let short_id=token.slice(0,length),directory_name='Workspace_'+name+'_'+type+'_'+short_id;
+    const used=()=>occupiedNames.has(fold(directory_name))||[...occupiedNames].some(n=>n.startsWith('workspace_')&&n.endsWith('_'+fold(short_id)));
+    while(used()&&length<token.length){short_id=token.slice(0,++length);directory_name='Workspace_'+name+'_'+type+'_'+short_id;}
+    if(used())throw Error('Workspace name/ID collision requires review.');
     return {id,display_name:displayName||i.display_name||human||null,name_source:i.workspace_name?'workspace_name':i.user_name?'user_name':i.display_name?'identity_display_name':displayName?'verified_ui_display':'unknown',
-      scope_type:i.scope_type||'unknown',plan_type:i.plan_type||null,type,directory_name:'Workspace_'+name+'_'+type+'_'+token.slice(0,8),
-      short_id:token.slice(0,8)};
+      scope_type:i.scope_type||'unknown',plan_type:Object.hasOwn(plans,plan)?plan:null,type,directory_name,short_id};
   }
   // A registry is created from full IDs, never from a path or display label.
   // Within a namespace, extend colliding ID suffixes deterministically.
