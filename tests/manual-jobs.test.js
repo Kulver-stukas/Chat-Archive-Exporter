@@ -19,15 +19,27 @@ const {createEnvironment}=require('./manual-fixtures');
  const f=await (await e.box.ChatArchiveVault.lookupFile(e.root,p)).handle.getFile();assert.deepEqual(new Uint8Array(await f.arrayBuffer()),bytes);
  const ledger=JSON.parse(await e.read('ChatGPT/Workspace test/.workspace.json'));assert.equal(Object.keys(ledger.chats).length,5);
  assert.equal((await e.S.entries(opts.requestId)).length,0,'completed payload cleared');
+ const first=await e.S.get(opts.requestId);
+ assert.deepEqual(Array.from(first.audit.selected_ids),items.map(x=>x.id));
+ assert.equal(first.audit.accepted_count,5);assert.equal(first.audit.outcome_counts.saved,5);
+ assert.equal(first.audit.outcomes.length,5);
+ assert(first.audit.outcomes.every(x=>x.result==='saved'&&x.actual_path&&x.planned_path));
+ assert(!first.audit.inflight);
  assert(!e.calls.some(x=>JSON.stringify(x).includes('memories')));
  // Second run skips existing chats and Sources without their content requests.
  e.calls.length=0;await e.submit(e.opts('job-repeat-12345',items));done=await e.drain();
  assert.equal(done.counts.saved,0);assert.equal(done.counts.skipped,5);assert.equal(done.sources.skipped,1);
  assert(!e.calls.some(x=>['CAE_GET_CHAT','CAE_SOURCE_START'].includes(x.type)));
+ const repeat=await e.S.get('job-repeat-12345');
+ assert.equal(repeat.audit.outcome_counts.verified_current,5);
+ assert(repeat.audit.outcomes.every(x=>x.reason==='Archived version matches workspace index.'&&x.actual_path));
  // Locally edited chat is preserved; newer remote version does not bypass hash guard.
  const path=ledger.chats[items[0].id].path;const loc=await e.box.ChatArchiveVault.lookupFile(e.root,path);
  const w=await loc.handle.createWritable();await w.write((await e.read(path))+'\nLOCAL EDIT');await w.close();
  e.calls.length=0;await e.submit(e.opts('job-conflict-12345',[{...items[0],updated:'2026-11-12T01:00:00Z'}]));done=await e.drain();
  assert.equal(done.counts.conflict,1);assert((await e.read(path)).endsWith('LOCAL EDIT'));assert(!e.calls.some(x=>x.type==='CAE_GET_CHAT'));
+ const conflict=await e.S.get('job-conflict-12345');
+ assert.equal(conflict.audit.outcome_counts.conflict,1);assert.equal(conflict.audit.outcomes[0].actual_path,path);
+ await assert.rejects(()=>e.submit({...e.opts('job-mismatch-12345',items),selectionCount:6}),/does not match the UI selection/);
  console.log('PASS: durable manual Vault jobs across controller replacement, selective project Sources, binary bytes, idempotent acceptance, repeat skips and local edit preservation');
 })().catch(e=>{console.error(e);process.exitCode=1;});

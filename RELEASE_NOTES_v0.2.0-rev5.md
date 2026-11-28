@@ -1,0 +1,12 @@
+# v0.2.0 rev.5 — Vault Integrity diagnostic preview
+
+Manifest: 0.2.0.7. Base: rev.4 / 0.2.0.6. ChatGPT only. Not a Chrome Web Store release.
+
+- Tools → Vault Integrity scans the verified current Workspace without writing, creating directories, requesting new permissions or contacting provider APIs. Quick mode checks names/paths and recorded versus physical byte sizes; full mode also reads conversation headers and hashes indexed files. The exported JSON includes the current scope, indexed records and per-path findings. It detects missing files, size/hash mismatches, duplicate/unindexed conversations, unindexed Sources/Library assets, pending Sources, split project directories, and chat-container mismatches where there is evidence. A stale legacy global chat entry shadowed by a current workspace entry is recorded separately. Reports are provisional when a writer claim is observed, indexes change during the scan, or evidence is incomplete. This is not an atomic disk snapshot. No repair or migration is attempted.
+- Tools → Export manual job diagnostics exports the recent job records retained in the current browser for the verified workspace (normally the last eight completed jobs plus active job). Records include accepted selection IDs/counts, per-chat outcome, planned/staged and actual path when known, retry/failure information and explicit skipped/conflict reasons. Detail is bounded to protect existing job metadata limits; truncated/older records are labeled. Existing portable activity receipt remains compatible and shows processed, saved/prepared, skipped and failed counts. No body text or signed URLs are added to diagnostic JSON.
+- Reject a stale/duplicate selection count rather than silently accepting fewer selected IDs.
+- Forced background detail verification rechecks the actual archived file before treating an identical index hash as proof that no write is needed.
+- Report the running exporter version in new manual archive reports. Label tracked chat counts as indexed in the widget.
+- No changes to the v1 Vault schema, naming or migration; no new remote endpoints, hosts, permissions, Memory extraction, deletion or repair actions. Existing v1 source quarantine remains unchanged.
+
+Install by extracting the GitHub source ZIP and replacing the files in the existing unpacked extension directory (or loading the extracted root containing manifest.json). Preserve the extension ID and browser storage when updating. Pause other Vault writers during the first audit. See UAT_v0.2.0-rev5.md.

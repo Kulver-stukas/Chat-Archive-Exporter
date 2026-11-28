@@ -4,7 +4,7 @@ const root=path.resolve(__dirname,'..'),baseline=require('./frozen-core.json');
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 // Explicit v0.1.8 integrity, v0.1.9 selective export, and v0.2.0 rev.1 routing changes. Unrelated
 // archival modules and permission scope still match the original baseline.
-const approvedChanges=new Set(['lib/manual-jobs.js','lib/library-inventory.js','lib/library-jobs.js',
+const approvedChanges=new Set(['lib/manual-jobs.js','lib/manual-store.js','lib/library-inventory.js','lib/library-jobs.js',
  'lib/library-policy.js','lib/library-vault.js','lib/paths.js','lib/meta.js','lib/sync.js',
  'lib/vault-transfer.js','lib/vault.js','lib/normalize.js','lib/manual-output.js',
  'lib/api.js','lib/config-inventory.js','lib/source-transfer.js','content.js','lib/tab-bootstrap.js','sync-watch.js','lib/library-store.js','lib/vault-context.js','lib/vault-diagnostics.js','offscreen.js','offscreen.html']);

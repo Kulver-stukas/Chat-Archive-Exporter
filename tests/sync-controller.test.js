@@ -271,6 +271,19 @@ async function drain(C){for(let n=0;n<30;n++){await C.tick();const c=C._state()?
    'unchanged chat content keeps the same SHA even after a forced verification');
  assert.equal(unchanged.chats[archived.id].exported,latest.chats[archived.id].exported,
    'an event-only verification never alters the archived export timestamp');
+ // Force the exact same remote detail after the local file is removed.
+ // The existing index hash must not suppress restoration of the missing file.
+ const missingLoc=await s.ChatArchiveVault.lookupFile(root,unchanged.chats[archived.id].path);
+ await missingLoc.dir.removeEntry(missingLoc.filename);
+ now+=120000;
+ await C.signal(1,{conversationId:archived.id,projectId:pid,signature:'restore-stream',streaming:true,sampledAt:now});
+ now+=20000;
+ await C.signal(1,{conversationId:archived.id,projectId:pid,signature:'restore-final',streaming:false,sampledAt:now});
+ now+=10000;await C.tick();now+=25000;await drain(C);
+ const restored=await s.ChatArchiveVault.lookupFile(root,unchanged.chats[archived.id].path);
+ assert(restored,'forced verification restores an absent local file even when content is unchanged');
+ const restoredLedger=await s.ChatArchiveVault.readJson(root,layout.prefix+'/.workspace.json');
+ assert(await s.ChatArchiveVault.matchesChatFile(restored.handle,restoredLedger.chats[archived.id]));
  detailOverrides.delete(archived.id);
  await C.pause(account);await new Promise(r=>setImmediate(r));
  // Binary Sources: registered old file + a new attachment + an old untracked
