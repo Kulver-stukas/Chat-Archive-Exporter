@@ -15,4 +15,6 @@ a.equal(q.queue.length,1);a.equal(q.queue[0].notBefore,100);a.equal(q.queue[0]._
 a(P.retryDelay({code:'API_COOLDOWN',retryAfterMs:44000})>=60000);
 a(P.retryDelay({code:'API_COOLDOWN',retryAfterMs:240000})>=240000);
 a.equal(P.publicState(null).enabled,false);
+ a.equal(P.publicState({enabled:false,sources:true}).sources,false);
+ a.equal(P.publicState({enabled:true,sources:true}).sources,true);
 console.log('PASS: opt-in enrollment boundary, no historical backfill, unknown/future dates, queue dedupe, durable hint revisions, Retry-After');

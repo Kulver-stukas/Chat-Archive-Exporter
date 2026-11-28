@@ -236,6 +236,7 @@ async function drain(C){for(let n=0;n<30;n++){await C.tick();const c=C._state()?
  assert.equal(rejected.accepted,false,'workspace mismatch rejects a resurrected tab binding');
  scopeAccount=account;activeTab.active=true;
  await C.pause(account);await new Promise(r=>setImmediate(r));
+ assert.equal((await C.inspect(account)).sources,false,'paused monitoring clears Project Sources');
  // The UI can finish a new answer before the conversation-list updated marker
  // propagates. One bounded recheck must eventually fetch the archived chat.
  now+=120000;C=instance();await C.enable({...opts,scope:'active'});

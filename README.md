@@ -1,3 +1,5 @@
+> **v0.2.0 rev.6 (0.2.0.8, schema preview):** Vault Schema v2 naming/registry contract and full, read-only migration plan in Tools. Existing Vault remains v1; no migration execution. Project Sources setting follows background monitoring. See VAULT_SCHEMA_V2.md and UAT_v0.2.0-rev6.md. Not a store release.
+
 > **v0.2.0 rev.5 (0.2.0.7, diagnostic preview):** Read-only Vault Integrity in Tools, recent per-chat manual job outcomes, clearer saved/processed counters, and missing-file recovery guard. No schema migration or folder renaming. See RELEASE_NOTES_v0.2.0-rev5.md and UAT_v0.2.0-rev5.md. Not a store release.
 
 > **v0.2.0 rev.4 (0.2.0.6):** Job, transport and storage boundary extraction; correct Chats archive status from Vault. Existing schemas and shared-index guard retained. v0.1 line frozen. See RELEASE_NOTES_v0.2.0-rev4.md, TEST_REPORT_v0.2.0-rev4.md, UAT_v0.2.0-rev4.md and TODO_v0.2.md.

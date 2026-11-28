@@ -1300,11 +1300,11 @@
   }
   function syncForm() {
     return {enabled:$('syncEnabled').checked,scope:$('syncScope').value,
-      enrollment:$('syncEnrollment').value,sources:$('syncSources').checked};
+      enrollment:$('syncEnrollment').value,sources:$('syncEnabled').checked&&$('syncSources').checked};
   }
   function syncSaved(c=state.sync) {
     return {enabled:!!c?.enabled,scope:c?.scope||'active',
-      enrollment:c?.enrollment||'tracked',sources:!!c?.sources};
+      enrollment:c?.enrollment||'tracked',sources:!!c?.enabled&&!!c?.sources};
   }
   function isSyncDirty(c=state.sync) {
     if(!state.syncLoaded)return false;
@@ -1323,8 +1323,12 @@
     $('syncApply').disabled=applyingRestored||state.busy||!editable||!isSyncDirty();
     if(!pending)$('restoreHint').classList.add('hidden');
     $('syncPause').disabled=!editable||!enabled;
-    for(const id of ['syncEnabled','syncScope','syncEnrollment','syncSources'])
+    for(const id of ['syncEnabled','syncScope','syncEnrollment'])
       $(id).disabled=state.busy||!editable;
+    // Project Sources are subordinate to chat/background monitoring, including
+    // unsaved form changes and restored preferences.
+    if(!$('syncEnabled').checked)$('syncSources').checked=false;
+    $('syncSources').disabled=state.busy||!editable||!$('syncEnabled').checked;
   }
   async function refreshSync(force=false) {
     const workspace=syncWorkspace();
@@ -1346,7 +1350,7 @@
       $('syncEnabled').checked=!!c.enabled;
       $('syncScope').value=c.scope||'active';
       $('syncEnrollment').value=c.enrollment||'tracked';
-      $('syncSources').checked=!!c.sources;
+      $('syncSources').checked=!!c.enabled&&!!c.sources;
     }
     $('syncStatus').textContent=c.enabled
       ? `${c.status} · ${c.trackedChats||0} archived chats · ${c.queue||0} queued · ${(c.buffer?.pending||0)} buffered · ${(c.buffer?.conflicts||0)} conflicts\nVault: ${c.vaultName||'unknown'}${c.since?' · Since: '+new Date(c.since).toLocaleString():''}\n${c.message||''}`
@@ -1443,7 +1447,7 @@
     status('Diagnostic download started. Verify the file in browser Downloads.');
   }
   $('scanVaultIntegrity')?.addEventListener('click',async()=>{
-    if(integrityScan)return;
+    if(integrityScan||migrationRun)return;
     const button=$('scanVaultIntegrity'),cancel=$('cancelVaultIntegrity'),download=$('downloadVaultIntegrity'),line=$('integrityStatus');
     integrityReport=null;integrityBinding=null;download.disabled=true;button.disabled=true;cancel.classList.remove('hidden');
     const token={cancelled:false};integrityScan=token;
@@ -1483,6 +1487,41 @@
       exportDiagnosticJson({schema:'cae.manual-job-diagnostics.v1',account_id:account,extension_version:chrome.runtime.getManifest().version,
         retained_jobs:jobs.length,exported_at:new Date().toISOString(),jobs},'CAE-manual-job-diagnostics');
     }catch(e){fail(e);}finally{button.disabled=false;}
+  });
+  let migrationPlan=null,migrationBinding=null,migrationRun=null;
+  $('planVaultMigration')?.addEventListener('click',async()=>{
+    if(migrationRun||integrityScan)return;
+    const button=$('planVaultMigration'),cancel=$('cancelVaultMigration'),download=$('downloadVaultMigration'),line=$('migrationStatus');
+    migrationPlan=null;migrationBinding=null;download.disabled=true;button.disabled=true;
+    $('scanVaultIntegrity').disabled=true;cancel.classList.remove('hidden');
+    const token={cancelled:false};migrationRun=token;
+    try{
+      const dir=verifiedClaimDirectory(),account=state.scope.accountId,context=contextGeneration,b={dir,account,context};
+      const check=()=>{if(token.cancelled)throw Error('Migration planning cancelled. No files modified.');
+        if(!integrityCurrent(b))throw Error('Workspace changed; generate a new plan.');};
+      check();
+      if(state.sync?.enabled||state.libraryJob?.enabled||manualJob?.active||state.libraryJob?.job?.active)
+        throw Error('Pause chat and Library monitoring and finish manual jobs before migration planning.');
+      const live=state.listSource==='live_api'&&state.listAccountId===account&&state.listLoadedAt?
+        {source:'live_api',account_id:account,captured_at:new Date(state.listLoadedAt).toISOString(),
+          projects:state.projects.map(p=>({id:p.id,name:p.name})),
+          chats:state.chats.map(c=>({id:c.id,title:c.title,projectId:c.projectId,project:c.project,gptId:c.gptId,gptName:c.gptName,containerObserved:c.containerObserved===true}))}:null;
+      line.textContent='Reading and hashing local files; no writes…';
+      const report=await CAEVaultMigrationV2.plan(dir,{accountId:account,display:state.scope.display,
+        preferredPrefix:ChatArchivePaths.createLayout(state.scope.display).prefix,live,check,progress:message=>{line.textContent=message;}});
+      check();migrationPlan=report;migrationBinding=b;
+      const c=report.counts;
+      line.textContent=(report.status==='blocked'?'Review blocked items':'Plan ready for review')+
+        ': '+c.files+' files, '+c.containers+' containers, '+c.blocked_files+' blocked files, '+c.blockers+' blocking findings. Target: '+(report.target_prefix||'unresolved')+
+        '. No files changed.';
+      download.disabled=false;
+    }catch(e){line.textContent=String(e.message||e);if(!token.cancelled)fail(e);}
+    finally{migrationRun=null;button.disabled=false;$('scanVaultIntegrity').disabled=false;cancel.classList.add('hidden');}
+  });
+  $('cancelVaultMigration')?.addEventListener('click',()=>{if(migrationRun)migrationRun.cancelled=true;});
+  $('downloadVaultMigration')?.addEventListener('click',()=>{
+    if(!migrationPlan||!integrityCurrent(migrationBinding)){migrationPlan=null;migrationBinding=null;$('downloadVaultMigration').disabled=true;status('Workspace changed; generate a new plan.');return;}
+    exportDiagnosticJson(migrationPlan,'CAE-vault-migration-v2');
   });
   let diagnosticsText=null;
   async function collectAccessDiagnostics(){
