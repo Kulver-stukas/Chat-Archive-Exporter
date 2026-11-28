@@ -1,3 +1,5 @@
+> **v0.2.0 rev.5 (0.2.0.7, diagnostic preview):** Read-only Vault Integrity in Tools, recent per-chat manual job outcomes, clearer saved/processed counters, and missing-file recovery guard. No schema migration or folder renaming. See RELEASE_NOTES_v0.2.0-rev5.md and UAT_v0.2.0-rev5.md. Not a store release.
+
 > **v0.2.0 rev.4 (0.2.0.6):** Job, transport and storage boundary extraction; correct Chats archive status from Vault. Existing schemas and shared-index guard retained. v0.1 line frozen. See RELEASE_NOTES_v0.2.0-rev4.md, TEST_REPORT_v0.2.0-rev4.md, UAT_v0.2.0-rev4.md and TODO_v0.2.md.
 
 > **v0.2.0 rev.3 hotfix 2 (0.2.0.5):** Files loads the saved Library inventory from the connected Workspace Vault before an optional due metadata refresh. The last recorded terminal manual and Library activities can be displayed across authorized browser profiles. Active jobs remain local. See RELEASE_NOTES_v0.2.0-rev3-hotfix2.md.

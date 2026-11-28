@@ -293,7 +293,7 @@
     const sources = context.source_downloads;
     const lines = [
       '# Archive report', '',
-      `Exporter version: 0.1.6.9`, '',
+      `Exporter version: ${context.exporter_version || '0.1.6.9'}`, '',
       `Captured: ${context.captured_at || 'unknown'}`, '',
       `Selection: ${context.selection || 'all_projects'}`, '',
       `Projects included: ${(context.projects || []).length}`, '',

@@ -1192,6 +1192,7 @@
         destination,mode:exportMode,items:items.map(x=>({...x})),projects:projectSnapshot,
         ...(options.exportSelection?{exportSelection:structuredClone(options.exportSelection)}:{}),
         selectedProjectIds:selectedProjects,
+        ...(Number.isSafeInteger(options.selectionCount)?{selectionCount:options.selectionCount,listCount:totalChats}:{}),
         fullWorkspace:exportMode==='all'&&totalChats>0&&items.length===totalChats}});
       showManual(j);
       if(exportMode!=='configuration')await acceptedExport();
@@ -1434,6 +1435,55 @@
       status('Writer claims cleared. Monitoring and queued jobs can retry.');
     }catch(e){$('writerClaimsStatus').textContent=e.message;fail(e);}
   });
+  let integrityReport=null,integrityBinding=null,integrityScan=null;
+  function integrityCurrent(b){return b&&state.directory===b.dir&&state.scope?.accountId===b.account&&
+    contextGeneration===b.context&&!state.currentContextPending&&providers.verified(state.scope);}
+  function exportDiagnosticJson(value,base){
+    downloadBlob(new Blob([JSON.stringify(value,null,2)+'\n'],{type:'application/json'}),base+'-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json');
+    status('Diagnostic download started. Verify the file in browser Downloads.');
+  }
+  $('scanVaultIntegrity')?.addEventListener('click',async()=>{
+    if(integrityScan)return;
+    const button=$('scanVaultIntegrity'),cancel=$('cancelVaultIntegrity'),download=$('downloadVaultIntegrity'),line=$('integrityStatus');
+    integrityReport=null;integrityBinding=null;download.disabled=true;button.disabled=true;cancel.classList.remove('hidden');
+    const token={cancelled:false};integrityScan=token;
+    try{
+      const dir=verifiedClaimDirectory(),account=state.scope.accountId,context=contextGeneration,b={dir,account,context};
+      if(!integrityCurrent(b))throw Error('Verify the current Workspace first.');
+      const check=()=>{if(token.cancelled)throw Error('Integrity scan cancelled. No files modified.');if(!integrityCurrent(b))throw Error('Workspace changed; scan again.');};
+      const full=$('integrityFull').checked;
+      line.textContent=full?'Scanning and hashing indexed files…':'Scanning file names and sizes…';
+      const report=await ChatArchiveVaultIntegrity.scan(dir,{accountId:account,display:state.scope.display,
+        preferredPrefix:ChatArchivePaths.createLayout(state.scope.display).prefix,full,check,progress:message=>{line.textContent=message;}});
+      check();integrityReport=report;integrityBinding=b;
+      const c=report.counts,flags=Object.values(report.issue_counts).reduce((n,x)=>n+x,0);
+      line.textContent=(report.complete?'Scan finished':'Incomplete scan')+(report.provisional?' (provisional: writers, changed indexes or incomplete evidence)':'')+
+        ': '+c.chat_files+' chat files; '+c.indexed_chats+' indexed chats; '+c.missing+' missing indexed files; '+c.misplaced_chats+' misplaced chats; '+c.duplicate_chats+' duplicate chat IDs; '+c.split_projects+' split projects; '+flags+' findings. '+(full?c.hash_verified+' hashes verified.':'Hashes not checked.');
+      download.disabled=false;
+    }catch(e){line.textContent=String(e.message||e);if(!token.cancelled)fail(e);}
+    finally{integrityScan=null;button.disabled=false;cancel.classList.add('hidden');}
+  });
+  $('cancelVaultIntegrity')?.addEventListener('click',()=>{if(integrityScan)integrityScan.cancelled=true;});
+  $('downloadVaultIntegrity')?.addEventListener('click',()=>{
+    if(!integrityReport||!integrityCurrent(integrityBinding)){integrityReport=null;integrityBinding=null;$('downloadVaultIntegrity').disabled=true;status('Workspace changed; scan again.');return;}
+    exportDiagnosticJson(integrityReport,'CAE-vault-integrity');
+  });
+  $('downloadManualAudit')?.addEventListener('click',async()=>{
+    const button=$('downloadManualAudit');button.disabled=true;
+    try{
+      const scope=state.scope,account=scope?.accountId,context=contextGeneration;
+      if(!providers.verified(scope)||state.currentContextPending)throw Error('Verify the current Workspace first.');
+      const jobs=(await ChatArchiveManualStore.list()).filter(j=>j.account===account).sort((x,y)=>String(y.created_at).localeCompare(String(x.created_at))).map(j=>({
+        operation_id:j.id,mode:j.mode,destination:j.destination,status:j.status,created_at:j.created_at,finished_at:j.finished_at||null,
+        workspace_prefix:j.prefix,total_chats:j.total_chats??j.items?.length??0,chats_done:j.chat_index,counts:j.counts,
+        selected_ids:j.audit?.selected_ids||j.items?.map(x=>x.id)||[],audit:j.audit||null,
+        detail_available:!!j.audit,delivery:j.delivery_outcome||null
+      }));
+      if(context!==contextGeneration||state.scope?.accountId!==account||state.currentContextPending||!providers.verified(state.scope))throw Error('Workspace changed; export diagnostics again.');
+      exportDiagnosticJson({schema:'cae.manual-job-diagnostics.v1',account_id:account,extension_version:chrome.runtime.getManifest().version,
+        retained_jobs:jobs.length,exported_at:new Date().toISOString(),jobs},'CAE-manual-job-diagnostics');
+    }catch(e){fail(e);}finally{button.disabled=false;}
+  });
   let diagnosticsText=null;
   async function collectAccessDiagnostics(){
     const local={schema:'cae.connection-diagnostics.v1',extensionVersion:chrome.runtime.getManifest?.().version||'unknown',
@@ -1598,7 +1648,11 @@
   $('reconnect').addEventListener('click', () => reconnect({force:true}).catch(fail));
   $('loadAll').addEventListener('click',()=>{if(SURFACE!=='panel')openPanel('all',true);else{mode('all');ensureListLoaded(true);}});
   $('exportCurrent').addEventListener('click', () => currentChat().catch(fail));
-  $('exportSelected').addEventListener('click', () => exportChats(state.chats.filter(c => state.selected.has(c.id))));
+  $('exportSelected').addEventListener('click', () => {
+    const items=state.chats.filter(c=>state.selected.has(c.id));
+    if(items.length!==state.selected.size){status('Selection contains chats missing from the current list. Refresh Chats and review the selection before exporting.');return;}
+    exportChats(items,{selectionCount:state.selected.size});
+  });
   $('snapshotSettings').addEventListener('click',()=>snapshotSettings().catch(fail));
   $('search').addEventListener('input', renderChats);
   $('selectAll').addEventListener('change', e => {

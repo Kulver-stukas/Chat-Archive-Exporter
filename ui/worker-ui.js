@@ -103,9 +103,9 @@
     const warning=vaultError?'Vault access check: '+vaultError:!known.slice(0,3).every(Boolean)?'One or more controller statuses unavailable.':'';
     const savedManual=preferSaved(m,history?.manual,m?.finishedAt||m?.updatedAt);
     const savedLibrary=preferSaved(library?.job,history?.library,library?.job?.finished_at);
-    const manualSummary=savedManual?history.manual.summary:!known[0]?'Unknown':m?`${U.humanStatus(m)} - ${safeLine(m.message||'')}. Chats: ${m.chatsDone||0}/${m.totalChats||0}, ${m.counts?.failed||0} failed.`:'No manual export recorded.';
+    const manualSummary=savedManual?history.manual.summary:!known[0]?'Unknown':m?`${U.humanStatus(m)} - ${safeLine(m.message||'')}. Chats: ${m.chatsDone||0}/${m.totalChats||0} processed; ${m.counts?.saved||0} ${m.destination==='vault'?'saved':'prepared'}, ${m.counts?.skipped||0} skipped, ${m.counts?.failed||0} failed.`:'No manual export recorded.';
     const librarySummary=savedLibrary?history.library.summary:!known[1]?'Unknown':library?.job?`${U.humanStatus(library.job)}: ${safeLine(library.job.detail||'')}`:'No Library task recorded.';
-    const syncSummary=!known[2]?'Unknown':sync?.enabled?`${safeLine(sync.status||'idle')} · ${sync.trackedChats||0} archived chats · ${sync.queue||0} queued · ${sync.buffer?.pending||0} buffered · ${sync.buffer?.conflicts||0} conflicts`:'Off';
+    const syncSummary=!known[2]?'Unknown':sync?.enabled?`${safeLine(sync.status||'idle')} · ${sync.trackedChats||0} indexed chats · ${sync.queue||0} queued · ${sync.buffer?.pending||0} buffered · ${sync.buffer?.conflicts||0} conflicts`:'Off';
     return {verified:true,scope_stale:false,canExport:/\/c\/[0-9a-f-]{36}/i.test(sender.tab.url||''),
       workspace:b.display,label:a.busy?a.label:warning?'Needs attention':a.label,icon:a.icon,busy:a.busy,monitoring:known[1]&&known[2]?a.monitoring:null,vault,vaultPermission,task,warning,
       monitoringSummary:!known[1]||!known[2]?'Monitoring status partially unavailable':a.monitoring?'Monitoring enabled; waiting for changes':'Monitoring disabled',
